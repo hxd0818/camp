@@ -1,5 +1,24 @@
 # CAMP Changelog
 
+## [2026-04-18] v0.1.3 - Add Unit & Edit Mode Enhancements
+
+### Overview
+Added ability to create new units by clicking on the floor plan canvas in edit mode. Fixed syntax error preventing page load.
+
+### Key Highlights
+- Click-to-place new unit with drag-to-resize
+- Confirm/cancel workflow before creating unit in database
+- Fix: missing closing div tag in FloorPlanViewer main container
+
+### Changed
+- `frontend/components/floor-plan/FloorPlanViewer.tsx` - Added add-unit mode with click placement, drag resize, confirm UI
+- `frontend/app/malls/[mallId]/floors/[floorId]/page.tsx` - Pass floorId prop to FloorPlanViewer
+
+### Fixed
+- JSX div tag mismatch: main container missing closing `</div>` causing "Unexpected token div" error
+
+---
+
 ## [2026-04-17] v0.1.2 - Floor Plan Image Generation
 
 ### Overview
