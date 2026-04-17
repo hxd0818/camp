@@ -1,5 +1,45 @@
 # CAMP Changelog
 
+## [2026-04-17] v0.1.1 - Make Project Runnable
+
+### Overview
+Fixed critical bugs, added authentication, database migrations, seed data, and improved Docker configuration. Project is now fully runnable.
+
+### Key Highlights
+- Fixed ContractStatus enum SyntaxError (indentation bug)
+- Fixed SQLAlchemy Base.metadata empty (models not imported)
+- Added JWT authentication system (login + token validation)
+- Configured Alembic async migrations for PostgreSQL
+- Created demo seed data script (Sunshine Plaza mall + 14 units + 10 tenants)
+- Improved Docker Compose with networks, healthchecks, restart policies
+
+### Fixed
+- `backend/app/models/contract.py:16` - ContractStatus.EXPIRED had wrong indentation causing SyntaxError
+- `backend/app/models/__init__.py` - Models were never imported, so Base.metadata had no tables (init_db() created nothing)
+
+### Added
+- **Auth System**: `app/core/security.py` (JWT utils), `app/api/v1/auth.py` (login/me endpoints)
+- **Database Migrations**: `alembic.ini`, `alembic/env.py` (async engine), `alembic/script.py.mako`
+- **Seed Data**: `backend/scripts/seed_data.py` - creates Sunshine Plaza mall with buildings, floors, units, tenants, contracts, invoices, payments
+- **Docker Improvements**: `.dockerignore`, named network (`camp-network`), enhanced healthchecks, restart policies, frontend node_modules volume isolation
+
+### Changed
+- `docker/docker-compose.yml` - added networks section, env_file, better healthchecks, restart policies
+- `docker/Dockerfile.backend` - added curl for healthcheck support
+- `docker/Dockerfile.frontend` - simplified build, create .next/uploads dirs at build time
+
+### Quick Start
+```bash
+cp .env.example .env
+docker compose -f docker/docker-compose.yml up -d --build
+# Seed demo data:
+docker exec camp-backend python scripts/seed_data.py
+# Access: http://localhost:3000 (frontend) | http://localhost:8000/docs (API)
+# Login: admin / admin123
+```
+
+---
+
 ## [2026-04-17] v0.1.0 - Initial Project Setup
 
 ### Overview
