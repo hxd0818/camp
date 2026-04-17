@@ -1,5 +1,34 @@
 # CAMP Changelog
 
+## [2026-04-17] v0.1.2 - Floor Plan Image Generation
+
+### Overview
+Added automatic floor plan image generation using PIL. Generated PNG images with colored unit rectangles for all 3 floors (F1/F2/F3). Fixed async SQLAlchemy issues in render-data endpoint.
+
+### Key Highlights
+- Created gen_floorplans.py script that generates 1200x800 PNG floor plan images
+- Images show colored rectangles per unit (green=occupied, red=vacant, etc.)
+- Fixed render-data API greenlet error with selectinload eager loading
+- Added static file serving for /uploads directory
+
+### Fixed
+- `backend/app/api/v1/floor_plans.py` - MissingGreenlet error when accessing unit.current_contract in async context
+- `backend/scripts/gen_floorplans.py` - Multiple PIL syntax errors (rectangle, textbbox, line)
+
+### Added
+- **Floor Plan Generation**: `backend/scripts/gen_floorplans.py` - generates PNG images + creates FloorPlan DB records
+- **Static File Serving**: `/uploads` mount in main.py for serving floor plan images
+- **Pillow Dependency**: `Pillow==10.4.0` in requirements.txt
+
+### Quick Start
+```bash
+# After seeding data, generate floor plans:
+docker exec camp-backend python scripts/gen_floorplans.py
+# View: http://localhost:3201/malls/1/floors/3 (F1 floor plan)
+```
+
+---
+
 ## [2026-04-17] v0.1.1 - Make Project Runnable
 
 ### Overview
