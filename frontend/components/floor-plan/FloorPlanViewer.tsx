@@ -17,11 +17,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8201';
 interface FloorPlanViewerProps {
   planId: number;
   mallId?: number;
+  floorId?: number;
   height?: string;
   editable?: boolean;
 }
 
-export function FloorPlanViewer({ planId, mallId, height = '70vh', editable = false }: FloorPlanViewerProps) {
+export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', editable = false }: FloorPlanViewerProps) {
   const [renderData, setRenderData] = useState<{
     image_url: string;
     hotspots: HotspotItem[];
@@ -44,6 +45,12 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh', editable = fa
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hotspotsDirty, setHotspotsDirty] = useState(false);
+
+  // Add unit mode (drawing new unit on canvas)
+  const [addingUnit, setAddingUnit] = useState(false);
+  const [newUnit, setNewUnit] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [newUnitDragging, setNewUnitDragging] = useState(false);
+  const newUnitDragStart = useRef({ mx: 0, my: 0, x: 0, y: 0, w: 0, h: 0 });
 
   // Fetch render data
   useEffect(() => {
@@ -175,6 +182,94 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh', editable = fa
     }
   }, [renderData]);
 
+  // --- Add unit handlers ---
+  const startAddingUnit = useCallback(() => {
+    setAddingUnit(true);
+    setNewUnit(null);
+    setNewUnitDragging(false);
+  }, []);
+
+  const cancelAddingUnit = useCallback(() => {
+    setAddingUnit(false);
+    setNewUnit(null);
+    setNewUnitDragging(false);
+  }, []);
+
+  const confirmAddUnit = useCallback(async () => {
+    if (!newUnit || !floorId) return;
+    try {
+      const unit = await apiClient.createUnit({
+        floor_id: floorId,
+        code: `NEW-${Date.now().toString(36).slice(-4).toUpperCase()}`,
+        name: '新铺位',
+        status: 'vacant',
+        layout_type: 'retail',
+        gross_area: Math.round((newUnit.w * newUnit.h) / 100),
+        hotspot_data: { x: newUnit.x, y: newUnit.y, width: newUnit.w, height: newUnit.h, shape: 'rect' },
+      });
+      // Refresh to get the new unit with proper ID
+      const data = await apiClient.getFloorPlanRenderData(planId);
+      setRenderData(prev => prev ? {
+        ...data,
+        hotspots: data.hotspots || [],
+        image_width: data.image_width || prev.image_width,
+        image_height: data.image_height || prev.image_height,
+      } : null);
+      setHotspotsDirty(true);
+      setAddingUnit(false);
+      setNewUnit(null);
+    } catch (err) {
+      alert('创建铺位失败: ' + (err instanceof Error ? err.message : '未知错误'));
+    }
+  }, [newUnit, floorId, planId]);
+
+  // Canvas click handler for adding unit (intercepts before pan)
+  const handleCanvasClickForAdd = useCallback((e: React.MouseEvent) => {
+    if (!addingUnit || !containerRef.current || !renderData) return;
+    // Only respond to left click on canvas background (not on hotspots)
+    if ((e.target as HTMLElement).closest('.hotspot-edit') ||
+        (e.target as HTMLElement).closest('img')) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    // Convert screen coords to image-space coords
+    const imgX = (e.clientX - rect.left - pan.x) / scale;
+    const imgY = (e.clientY - rect.top - pan.y) / scale;
+
+    setNewUnit({ x: Math.round(imgX), y: Math.round(imgY), w: 120, h: 80 });
+    setNewUnitDragging(true);
+    newUnitDragStart.current = { mx: e.clientX, my: e.clientY, x: Math.round(imgX), y: Math.round(imgY), w: 120, h: 80 };
+  }, [addingUnit, pan, scale, renderData]);
+
+  // Override mouse down for add mode
+  const handleMouseDownWrapper = useCallback((e: React.MouseEvent) => {
+    if (addingUnit && !newUnit) {
+      handleCanvasClickForAdd(e);
+      return;
+    }
+    if ((e.target as HTMLElement).closest('.hotspot-edit')) return;
+    if (e.button !== 0) return;
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    panStart.current = { ...pan };
+  }, [addingUnit, newUnit, handleCanvasClickForAdd, pan]);
+
+  // Override mouse move for new unit dragging
+  useEffect(() => {
+    if (!newUnitDragging || !newUnit) return;
+    const onMove = (e: MouseEvent) => {
+      const dx = (e.clientX - newUnitDragStart.current.mx);
+      const dy = (e.clientY - newUnitDragStart.current.my);
+      const orig = newUnitDragStart.current;
+      const nw = Math.max(30, orig.w + dx);
+      const nh = Math.max(20, orig.h + dy);
+      setNewUnit({ x: orig.x, y: orig.y, w: nw, h: nh });
+    };
+    const onUp = () => setNewUnitDragging(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [newUnitDragging, newUnit]);
+
   const handleClosePanel = useCallback(() => setSelectedUnit(null), []);
   const getStatusColor = (h: HotspotItem): string => h.status_color || '#94a3b8';
 
@@ -194,9 +289,9 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh', editable = fa
       <div
         ref={containerRef}
         className="floor-plan-container flex-1 border rounded-lg overflow-hidden bg-gray-100 relative"
-        style={{ cursor: isDragging ? 'grabbing' : editMode ? 'default' : 'grab' }}
+        style={{ cursor: (addingUnit && !newUnit) ? 'crosshair' : isDragging ? 'grabbing' : editMode ? 'default' : 'grab' }}
         onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
+        onMouseDown={handleMouseDownWrapper}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
@@ -212,11 +307,20 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh', editable = fa
             <div className="mt-2 border-t pt-1">
               <button
                 onClick={toggleEditMode}
-                className={`w-8 h-8 flex items-center justify-center rounded-md shadow-sm border text-xs font-medium ${editMode ? 'bg-camp-600 text-white border-camp-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                title={editMode ? '退出编辑' : '编辑铺位'}
+                className={`w-8 h-8 flex items-center justify-center rounded-md shadow-sm border text-xs font-medium ${editMode && !addingUnit ? 'bg-camp-600 text-white border-camp-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                title={editMode && !addingUnit ? '退出编辑' : '编辑铺位'}
               >
-                {editMode ? '✕' : '✎'}
+                {editMode && !addingUnit ? '✕' : '✎'}
               </button>
+              {editMode && (
+                <button
+                  onClick={addingUnit ? cancelAddingUnit : startAddingUnit}
+                  className={`w-8 h-8 flex items-center justify-center rounded-md shadow-sm border text-xs font-bold mt-1 ${addingUnit ? 'bg-red-500 text-white border-red-500 hover:bg-red-600' : 'bg-green-500 text-white border-green-500 hover:bg-green-600'}`}
+                  title={addingUnit ? '取消新增' : '新增铺位'}
+                >
+                  {addingUnit ? '✕' : '+'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -255,13 +359,60 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh', editable = fa
               onUpdate={(x, y, w, h) => handleHotspotUpdate(hs.unit_id, x, y, w, h)}
             />
           ))}
-        </div>
+
+          {/* New unit preview (while adding) */}
+          {addingUnit && newUnit && (
+            <div
+              className="absolute"
+              style={{
+                left: newUnit.x, top: newUnit.y,
+                width: newUnit.w, height: newUnit.h,
+                backgroundColor: '#fbbf2480',
+                border: '2px dashed #f59e0b0',
+                cursor: newUnitDragging ? 'crosshair' : 'move',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                setNewUnitDragging(true);
+                newUnitDragStart.current = { mx: e.clientX, my: e.clientY, x: newUnit.x, y: newUnit.y, w: newUnit.w, h: newUnit.h };
+              }}
+            >
+              <span className="text-[12px] font-bold text-amber-700 select-none pointer-events-none">
+                + 新铺位 ({newUnit.w}x{newUnit.h})
+              </span>
+            </div>
+          )}
+
+          {/* Confirm bar for new unit */}
+          {addingUnit && newUnit && !newUnitDragging && (
+            <div
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-2 bg-white rounded-lg shadow-lg border px-4 py-2"
+            >
+              <span className="text-sm text-gray-600">新铺位 {Math.round(newUnit.w)}x{Math.round(newUnit.h)} - 点击确认创建</span>
+              <button
+                onClick={confirmAddUnit}
+                className="px-3 py-1 text-sm font-medium rounded-md bg-camp-600 text-white hover:bg-camp-700"
+              >
+                确认创建
+              </button>
+              <button
+                onClick={cancelAddingUnit}
+                className="px-3 py-1 text-sm rounded-md border bg-white text-gray-600 hover:bg-gray-50"
+              >
+                取消
+              </button>
+            </div>
+          )}
       </div>
 
       {/* Detail Panel */}
       {selectedUnit && !editMode && (
         <UnitDetailPanel unit={selectedUnit} onClose={handleClosePanel} mallId={mallId} />
       )}
+      </div>
     </div>
   );
 }
