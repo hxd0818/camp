@@ -25,33 +25,33 @@ export default function FinancePage() {
     <main className="min-h-screen bg-gray-50">
       <header className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/" className="text-sm text-gray-500 hover:text-camp-600">&larr; Home</Link>
-          <h1 className="text-xl font-bold">Finance</h1>
+          <Link href="/" className="text-sm text-gray-500 hover:text-camp-600">&larr; 首页</Link>
+          <h1 className="text-xl font-bold">财务管理</h1>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <SummaryCard label="Total Invoiced" value={`${totalAmount.toLocaleString()}`} />
-          <SummaryCard label="Pending Payment" value={String(pendingCount)} subLabel="invoices" />
-          <SummaryCard label="Collected" value={String(paidCount)} subLabel="invoices" />
+          <SummaryCard label="开票总额" value={`${totalAmount.toLocaleString()}`} />
+          <SummaryCard label="待收款" value={String(pendingCount)} subLabel="张发票" />
+          <SummaryCard label="已收款" value={String(paidCount)} subLabel="张发票" />
         </div>
 
         {/* Invoices Table */}
         {loading ? (
-          <p className="text-gray-500">Loading...</p>
+          <p className="text-gray-500">加载中...</p>
         ) : invoices.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">No invoices yet</div>
+          <div className="text-center py-12 text-gray-400">暂无账单数据</div>
         ) : (
           <div className="bg-white rounded-lg border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Invoice #</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Amount</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Due Date</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">发票编号</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">金额</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">到期日</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">状态</th>
                 </tr>
               </thead>
               <tbody>
@@ -66,7 +66,7 @@ export default function FinancePage() {
                         inv.status === 'overdue' ? 'bg-red-50 text-red-700' :
                         'bg-gray-100 text-gray-600'
                       }`}>
-                        {inv.status}
+                        {inv.status === 'paid' ? '已付' : inv.status === 'overdue' ? '逾期' : inv.status}
                       </span>
                     </td>
                   </tr>

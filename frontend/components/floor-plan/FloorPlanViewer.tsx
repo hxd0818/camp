@@ -44,7 +44,7 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
           image_height: data.image_height,
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load floor plan');
+        setError(err instanceof Error ? err.message : '加载失败');
       } finally {
         setLoading(false);
       }
@@ -73,7 +73,7 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
   if (loading) {
     return (
       <div className="flex items-center justify-center" style={{ height }}>
-        <div className="text-gray-500">Loading floor plan...</div>
+        <div className="text-gray-500">加载图纸中...</div>
       </div>
     );
   }
@@ -82,7 +82,7 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
     return (
       <div className="flex items-center justify-center bg-red-50 rounded-lg" style={{ height }}>
         <div className="text-red-600">
-          {error || 'No floor plan available. Please upload a floor plan first.'}
+          {error || '暂无图纸数据，请先上传楼层平面图'}
         </div>
       </div>
     );
@@ -99,7 +99,7 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
           {/* Background Image */}
           <img
             src={renderData.image_url}
-            alt="Floor Plan"
+            alt="楼层平面图"
             className="block max-w-full"
             draggable={false}
           />
@@ -139,22 +139,20 @@ interface HotspotOverlayProps {
 function HotspotOverlay({ hotspot, color, onClick }: HotspotOverlayProps) {
   const { x, y, w, h, shape, unit_code, unit_name, tenant_name } = hotspot;
 
-  // Convert to percentage-based positioning for responsive scaling
-  const style: React.CSSProperties = {
+  const baseStyle: React.CSSProperties = {
     left: `${x}px`,
     top: `${y}px`,
     width: `${w}px`,
     height: `${h}px`,
-    backgroundColor: `${color}33`, // 20% opacity background
+    backgroundColor: `${color}33`,
     borderColor: color,
   };
 
   if (shape === 'polygon' && hotspot.points) {
-    // SVG polygon for irregular shapes
     const pointsStr = hotspot.points.map(p => p.join(',')).join(' ');
     return (
       <svg
-        className="hotspot-polygon absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none"
         style={{ overflow: 'visible' }}
       >
         <polygon
@@ -162,11 +160,10 @@ function HotspotOverlay({ hotspot, color, onClick }: HotspotOverlayProps) {
           fill={`${color}33`}
           stroke={color}
           strokeWidth="2"
-          className="cursor-pointer pointer-events-auto"
-          onClick={onClick}
+          className="cursor-pointer pointer-events-auto hover:brightness-110"
+          onClick={handleClick}
           style={{ transition: 'all 0.2s ease' }}
         />
-        {/* Tooltip on hover */}
         <title>{unit_name || unit_code}</title>
       </svg>
     );
@@ -174,17 +171,20 @@ function HotspotOverlay({ hotspot, color, onClick }: HotspotOverlayProps) {
 
   return (
     <div
-      className="hotspot"
-      style={style}
-      onClick={onClick}
+      className="group"
+      style={baseStyle}
+      onClick={handleClick}
       title={`${unit_name || unit_code}${tenant_name ? ` - ${tenant_name}` : ''}`}
     >
-      {/* Unit code label inside hotspot */}
-      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white drop-shadow-sm select-none pointer-events-none">
-        {unit_code}
-      </span>
+      {unit_code && (
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white opacity-80 select-none pointer-events-none whitespace-nowrap overflow-hidden">
+          {unit_code}
+        </span>
+      )}
     </div>
   );
+
+  function handleClick() { onClick(); }
 }
 
 export default FloorPlanViewer;

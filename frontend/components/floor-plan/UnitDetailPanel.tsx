@@ -18,31 +18,31 @@ interface UnitDetailPanelProps {
 
 export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps) {
   const statusLabel: Record<string, string> = {
-    vacant: 'Vacant',
-    occupied: 'Occupied',
-    reserved: 'Reserved',
-    maintenance: 'Maintenance',
-    blocked: 'Blocked',
+    vacant: '空置',
+    occupied: '已租',
+    reserved: '预留',
+    maintenance: '维保中',
+    blocked: '封禁',
   };
 
   const contractStatusLabel: Record<string, string> = {
-    draft: 'Draft',
-    active: 'Active',
-    expiring: 'Expiring',
-    expired: 'Expired',
-    terminated: 'Terminated',
-    renewed: 'Renewed',
+    draft: '草稿',
+    active: '有效',
+    expiring: '即将到期',
+    expired: '已过期',
+    terminated: '已终止',
+    renewed: '已续约',
   };
 
   return (
     <div className="w-80 bg-white border-l shadow-lg flex flex-col animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
-        <h3 className="font-semibold text-sm text-gray-900">Unit Details</h3>
+        <h3 className="font-semibold text-sm text-gray-900">铺位详情</h3>
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-          aria-label="Close panel"
+          aria-label="关闭面板"
         >
           &times;
         </button>
@@ -65,13 +65,13 @@ export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps)
         {/* Status */}
         <section className="bg-gray-50 rounded-lg p-3 space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Status</span>
+            <span className="text-gray-500">状态</span>
             <span className="font-medium">{statusLabel[unit.unit_status] || unit.unit_status}</span>
           </div>
           {unit.area && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Area</span>
-              <span className="font-medium">{unit.area} m²</span>
+              <span className="text-gray-500">面积</span>
+              <span className="font-medium">{unit.area} 平方米</span>
             </div>
           )}
         </section>
@@ -80,7 +80,7 @@ export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps)
         {unit.tenant_name && (
           <section>
             <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-              Tenant
+              租户信息
             </h4>
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="font-medium text-sm text-blue-900">{unit.tenant_name}</p>
@@ -92,11 +92,11 @@ export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps)
         {unit.contract_status && (
           <section>
             <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-              Contract
+              合同信息
             </h4>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Status</span>
+                <span className="text-gray-500">合同状态</span>
                 <span
                   className={`font-medium ${
                     unit.contract_status === 'active'
@@ -111,7 +111,7 @@ export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps)
               </div>
               {unit.lease_end && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Lease End</span>
+                  <span className="text-gray-500">租期截止</span>
                   <span className="font-medium">{formatDate(unit.lease_end)}</span>
                 </div>
               )}
@@ -122,8 +122,8 @@ export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps)
         {/* Empty State */}
         {!unit.tenant_name && !unit.contract_status && (
           <section className="text-center py-6">
-            <p className="text-sm text-gray-400">No active contract</p>
-            <p className="text-xs text-gray-300 mt-1">This unit is available</p>
+            <p className="text-sm text-gray-400">暂无合同</p>
+            <p className="text-xs text-gray-300 mt-1">该铺位当前可出租</p>
           </section>
         )}
       </div>
@@ -136,7 +136,7 @@ export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps)
             /* Navigate to unit edit page */
           }}
         >
-          Edit Unit
+          编辑铺位
         </button>
         {unit.tenant_name && (
           <button
@@ -145,7 +145,7 @@ export function UnitDetailPanel({ unit, onClose, mallId }: UnitDetailPanelProps)
               /* Navigate to contract page */
             }}
           >
-            View Contract
+            查看合同
           </button>
         )}
       </div>
