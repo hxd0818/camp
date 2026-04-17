@@ -13,7 +13,7 @@ class ContractStatus(str, enum.Enum):
     DRAFT = "draft"
     ACTIVE = "active"
     EXPIRING = "expiring"
-      EXPIRED = "expired"
+    EXPIRED = "expired"
     TERMINATED = "terminated"
     RENEWED = "renewed"
 
