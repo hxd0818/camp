@@ -151,6 +151,7 @@ interface HotspotOverlayProps {
 
 function HotspotOverlay({ hotspot, imgW, imgH, color, onClick }: HotspotOverlayProps) {
   const { x, y, w, h, shape, unit_code, unit_name, tenant_name } = hotspot;
+  const handleClick = useCallback(() => { onClick(); }, [onClick]);
 
   // Convert pixel coords to percentages so they scale with the image
   const pctStyle: React.CSSProperties = {
@@ -199,8 +200,7 @@ function HotspotOverlay({ hotspot, imgW, imgH, color, onClick }: HotspotOverlayP
       {/* Hover highlight border */}
       <div className="absolute inset-0 border-2 border-transparent group-hover:border-white/60 transition-colors pointer-events-none" />
     </div>
-
-  function handleClick() { onClick(); }
+  );
 }
 
 export default FloorPlanViewer;
