@@ -34,7 +34,7 @@ cp .env.example .env
 docker compose -f docker/docker-compose.yml up -d --build
 # Seed demo data:
 docker exec camp-backend python scripts/seed_data.py
-# Access: http://localhost:3000 (frontend) | http://localhost:8000/docs (API)
+# Access: http://localhost:3201 (frontend) | http://localhost:8201/docs (API)
 # Login: admin / admin123
 ```
 

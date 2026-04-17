@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: cdata_dev_password
       POSTGRES_DB: cdata
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +29,7 @@ services:
     image: redis:7-alpine
     container_name: camp-redis
     ports:
-      - "6380:6379"
+      - "6381:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -57,7 +57,7 @@ services:
       UPLOAD_DIR: /app/uploads
       DEBUG: "true"
     ports:
-      - "8000:8000"
+      - "8201:8000"
     volumes:
       - ../backend/app:/app/app:ro
       - uploads:/app/uploads
@@ -80,7 +80,7 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8000
       NODE_ENV: development
     ports:
-      - "3000:3000"
+      - "3201:3000"
     volumes:
       - ../frontend/app:/app/app:ro
       - ../frontend/components:/app/components:ro

@@ -44,16 +44,16 @@ docker compose -f docker/docker-compose.yml up -d
 ```
 
 This starts:
-- PostgreSQL on port 5433
-- Redis on port 6380
-- Backend API on port 8000
-- Frontend on port 3000
+- PostgreSQL on port 5434
+- Redis on port 6381
+- Backend API on port 8201
+- Frontend on port 3201
 
 ### 3. Access
 
-- Frontend: http://localhost:3000
-- API Docs: http://localhost:8000/docs
-- Health Check: http://localhost:8000/health
+- Frontend: http://localhost:3201
+- API Docs: http://localhost:8201/docs
+- Health Check: http://localhost:8201/health
 
 ## Project Structure
 
