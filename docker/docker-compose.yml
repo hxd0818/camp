@@ -15,10 +15,14 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cdata"]
+      test: ["CMD-SHELL", "pg_isready -U cdata -d cdata"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - camp-network
 
   # Redis Cache
   redis:
@@ -33,6 +37,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
+    networks:
+      - camp-network
 
   # Backend API
   backend:
@@ -40,6 +47,8 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.backend
     container_name: camp-backend
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://cdata:cdata_dev_password@postgres:5432/cdata
       REDIS_URL: redis://redis:6379/0
@@ -57,6 +66,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - camp-network
 
   # Frontend (Next.js)
   frontend:
@@ -66,6 +78,7 @@ services:
     container_name: camp-frontend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      NODE_ENV: development
     ports:
       - "3000:3000"
     volumes:
@@ -73,10 +86,19 @@ services:
       - ../frontend/components:/app/components:ro
       - ../frontend/lib:/app/lib:ro
       - ../frontend/public:/app/public:ro
+      frontend_node_modules:/app/node_modules
     depends_on:
       - backend
+    restart: unless-stopped
+    networks:
+      - camp-network
+
+networks:
+  camp-network:
+    driver: bridge
 
 volumes:
   pgdata:
   redisdata:
   uploads:
+  frontend_node_modules:

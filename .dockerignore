@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+.github/
+
+# Docs
+docs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (runtime only)
+frontend/public/uploads/*
+!frontend/public/uploads/.gitkeep
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic versions (generated)
+backend/alembic/versions/*.py
+!backend/alembic/versions/.gitkeep
