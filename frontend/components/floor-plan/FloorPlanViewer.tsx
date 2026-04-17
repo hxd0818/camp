@@ -4,8 +4,8 @@
  * FloorPlanViewer - Core component for CAMP's floor plan visualization.
  *
  * Renders a floor plan image with interactive hotspot overlays.
- * Each hotspot represents a store unit and is clickable to show details.
- * Hotspot positions are percentage-based to stay aligned when image scales.
+ * Supports zoom in/out and drag-to-pan.
+ * Hotspot positions are percentage-based so they stay aligned at any zoom level.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -31,6 +31,13 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
   const [selectedUnit, setSelectedUnit] = useState<HotspotItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Zoom & pan state
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const panStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Fetch render data
@@ -58,10 +65,76 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
     }
   }, [planId]);
 
+  // Auto-fit image on load
+  useEffect(() => {
+    if (!containerRef.current || !renderData) return;
+    const container = containerRef.current;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const iw = renderData.image_width || 1200;
+    const ih = renderData.image_height || 820;
+    const fitScale = Math.min(cw / iw, ch / ih) * 0.95;
+    setScale(fitScale);
+    const ox = (cw - iw * fitScale) / 2;
+    const oy = (ch - ih * fitScale) / 2;
+    setPan({ x: ox, y: oy });
+  }, [renderData]);
+
+  // Zoom handlers
+  const handleZoomIn = useCallback(() => {
+    setScale(s => Math.min(s * 1.3, 5));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setScale(s => Math.max(s / 1.3, 0.2));
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    if (!containerRef.current || !renderData) return;
+    const container = containerRef.current;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const iw = renderData.image_width || 1200;
+    const ih = renderData.image_height || 820;
+    const fitScale = Math.min(cw / iw, ch / ih) * 0.95;
+    setScale(fitScale);
+    setPan({ x: (cw - iw * fitScale) / 2, y: (ch - ih * fitScale) / 2 });
+  }, [renderData]);
+
+  // Mouse wheel zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale(s => Math.max(0.2, Math.min(5, s * delta)));
+  }, []);
+
+  // Pan handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return; // left click only
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    panStart.current = { ...pan };
+  }, [pan]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    setPan({
+      x: panStart.current.x + dx,
+      y: panStart.current.y + dy,
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   // Handle hotspot click
   const handleHotspotClick = useCallback((hotspot: HotspotItem) => {
+    if (isDragging) return; // ignore clicks after drag
     setSelectedUnit(hotspot);
-  }, []);
+  }, [isDragging]);
 
   // Close detail panel
   const handleClosePanel = useCallback(() => {
@@ -99,21 +172,61 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
       {/* Floor Plan Area */}
       <div
         ref={containerRef}
-        className="floor-plan-container flex-1 border rounded-lg overflow-auto bg-white"
+        className="floor-plan-container flex-1 border rounded-lg overflow-hidden bg-gray-100 relative"
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       >
+        {/* Zoom Controls */}
+        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
+          <button
+            onClick={handleZoomIn}
+            className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold"
+            title="放大"
+          >
+            +
+          </button>
+          <button
+            onClick={handleZoomOut}
+            className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold"
+            title="缩小"
+          >
+            -
+          </button>
+          <button
+            onClick={handleZoomReset}
+            className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-xs"
+            title="适应窗口"
+          >
+            Fit
+          </button>
+          <div className="text-center text-[10px] text-gray-400 mt-1">
+            {Math.round(scale * 100)}%
+          </div>
+        </div>
+
+        {/* Transformable content */}
         <div
-          className="floor-plan-image relative inline-block"
-          style={{ width: imgW, height: imgH }}
+          className="absolute origin-top-left"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+            width: imgW,
+            height: imgH,
+          }}
         >
           {/* Background Image */}
           <img
             src={`${API_BASE}${renderData.image_url}`}
             alt="楼层平面图"
-            className="block w-full h-full"
+            className="block pointer-events-none"
             draggable={false}
+            style={{ width: imgW, height: imgH }}
           />
 
-          {/* Hotspot Overlays - percentage-based positioning */}
+          {/* Hotspot Overlays */}
           {renderData.hotspots.map((hotspot, index) => (
             <HotspotOverlay
               key={`hs-${hotspot.unit_id}-${index}`}
@@ -153,37 +266,34 @@ function HotspotOverlay({ hotspot, imgW, imgH, color, onClick }: HotspotOverlayP
   const { x, y, w, h, shape, unit_code, unit_name, tenant_name } = hotspot;
   const handleClick = useCallback(() => { onClick(); }, [onClick]);
 
-  // Convert pixel coords to percentages so they scale with the image
+  // Percentage-based positioning relative to image dimensions
   const pctStyle: React.CSSProperties = {
-    left: `${(x / imgW) * 100}%`,
-    top: `${(y / imgH) * 100}%`,
-    width: `${(w / imgW) * 100}%`,
-    height: `${(h / imgH) * 100}%`,
+    position: 'absolute',
+    left: x,
+    top: y,
+    width: w,
+    height: h,
     backgroundColor: `${color}33`,
     borderColor: color,
+    borderWidth: 2,
+    borderStyle: 'solid',
     cursor: 'pointer',
   };
 
   if (shape === 'polygon' && hotspot.points) {
-    // Convert polygon points to percentages
-    const pctPoints = hotspot.points.map(p => [
-      ((p[0] / imgW) * 100).toFixed(2),
-      ((p[1] / imgH) * 100).toFixed(2),
-    ]);
-    const pointsStr = pctPoints.map(p => p.join('%,')).join('% ');
     return (
       <svg
         className="absolute inset-0 pointer-events-none"
-        style={{ overflow: 'visible', width: '100%', height: '100%' }}
+        style={{ overflow: 'visible', width: imgW, height: imgH }}
       >
         <polygon
-          points={pointsStr}
+          points={hotspot.points.map(p => p.join(',')).join(' ')}
           fill={`${color}33`}
           stroke={color}
           strokeWidth="2"
           className="cursor-pointer pointer-events-auto hover:brightness-110"
           onClick={handleClick}
-          style={{ transition: 'all 0.2s ease' }}
+          style={{ transition: 'all 0.15s ease' }}
         />
         <title>{unit_name || unit_code}</title>
       </svg>
@@ -192,14 +302,11 @@ function HotspotOverlay({ hotspot, imgW, imgH, color, onClick }: HotspotOverlayP
 
   return (
     <div
-      className="absolute group hover:brightness-95 transition-all duration-150"
+      className="group hover:brightness-90 transition-all duration-150"
       style={pctStyle}
       onClick={handleClick}
       title={`${unit_name || unit_code}${tenant_name ? ` - ${tenant_name}` : ''}`}
-    >
-      {/* Hover highlight border */}
-      <div className="absolute inset-0 border-2 border-transparent group-hover:border-white/60 transition-colors pointer-events-none" />
-    </div>
+    />
   );
 }
 
