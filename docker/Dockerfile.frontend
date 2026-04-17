@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+
+# Copy application code
+COPY frontend/ .
+
+EXPOSE 3000
+
+# Use next dev for development with hot-reload
+CMD ["npm", "run", "dev"]

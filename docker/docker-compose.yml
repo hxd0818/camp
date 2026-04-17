@@ -1,0 +1,82 @@
+# CAMP Development Environment
+# Usage: docker compose -f docker/docker-compose.yml up -d
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: camp-postgres
+    environment:
+      POSTGRES_USER: cdata
+      POSTGRES_PASSWORD: cdata_dev_password
+      POSTGRES_DB: cdata
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cdata"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: camp-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: camp-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cdata:cdata_dev_password@postgres:5432/cdata
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: camp-dev-secret-key-change-in-production
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      UPLOAD_DIR: /app/uploads
+      DEBUG: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend/app:/app/app:ro
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: camp-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend/app:/app/app:ro
+      - ../frontend/components:/app/components:ro
+      - ../frontend/lib:/app/lib:ro
+      - ../frontend/public:/app/public:ro
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
