@@ -3,9 +3,8 @@
 /**
  * FloorPlanViewer - Core component for CAMP's floor plan visualization.
  *
- * Renders a floor plan image with interactive hotspot overlays.
- * Supports zoom in/out and drag-to-pan.
- * Hotspot positions are percentage-based so they stay aligned at any zoom level.
+ * View mode: zoom/pan, click hotspot to see detail panel.
+ * Edit mode: drag to move units, drag corners/edges to resize, save changes.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -19,9 +18,10 @@ interface FloorPlanViewerProps {
   planId: number;
   mallId?: number;
   height?: string;
+  editable?: boolean;
 }
 
-export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanViewerProps) {
+export function FloorPlanViewer({ planId, mallId, height = '70vh', editable = false }: FloorPlanViewerProps) {
   const [renderData, setRenderData] = useState<{
     image_url: string;
     hotspots: HotspotItem[];
@@ -32,13 +32,18 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Zoom & pan state
+  // Zoom & pan
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const panStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Edit mode
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [hotspotsDirty, setHotspotsDirty] = useState(false);
 
   // Fetch render data
   useEffect(() => {
@@ -59,58 +64,44 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
         setLoading(false);
       }
     }
-
-    if (planId) {
-      loadData();
-    }
+    if (planId) loadData();
   }, [planId]);
 
-  // Auto-fit image on load
+  // Auto-fit on load
   useEffect(() => {
     if (!containerRef.current || !renderData) return;
-    const container = containerRef.current;
-    const cw = container.clientWidth;
-    const ch = container.clientHeight;
+    const c = containerRef.current;
+    const cw = c.clientWidth;
+    const ch = c.clientHeight;
     const iw = renderData.image_width || 1200;
     const ih = renderData.image_height || 820;
-    const fitScale = Math.min(cw / iw, ch / ih) * 0.95;
-    setScale(fitScale);
-    const ox = (cw - iw * fitScale) / 2;
-    const oy = (ch - ih * fitScale) / 2;
-    setPan({ x: ox, y: oy });
+    const fit = Math.min(cw / iw, ch / ih) * 0.95;
+    setScale(fit);
+    setPan({ x: (cw - iw * fit) / 2, y: (ch - ih * fit) / 2 });
   }, [renderData]);
 
-  // Zoom handlers
-  const handleZoomIn = useCallback(() => {
-    setScale(s => Math.min(s * 1.3, 5));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setScale(s => Math.max(s / 1.3, 0.2));
-  }, []);
-
+  // --- Zoom ---
+  const handleZoomIn = useCallback(() => setScale(s => Math.min(s * 1.3, 5)), []);
+  const handleZoomOut = useCallback(() => setScale(s => Math.max(s / 1.3, 0.2)), []);
   const handleZoomReset = useCallback(() => {
     if (!containerRef.current || !renderData) return;
-    const container = containerRef.current;
-    const cw = container.clientWidth;
-    const ch = container.clientHeight;
+    const c = containerRef.current;
     const iw = renderData.image_width || 1200;
     const ih = renderData.image_height || 820;
-    const fitScale = Math.min(cw / iw, ch / ih) * 0.95;
-    setScale(fitScale);
-    setPan({ x: (cw - iw * fitScale) / 2, y: (ch - ih * fitScale) / 2 });
+    const fit = Math.min(c.clientWidth / iw, c.clientHeight / ih) * 0.95;
+    setScale(fit);
+    setPan({ x: (c.clientWidth - iw * fit) / 2, y: (c.clientHeight - ih * fit) / 2 });
   }, [renderData]);
 
-  // Mouse wheel zoom
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale(s => Math.max(0.2, Math.min(5, s * delta)));
+    setScale(s => Math.max(0.2, Math.min(5, s * (e.deltaY > 0 ? 0.9 : 1.1))));
   }, []);
 
-  // Pan handlers
+  // --- Pan (canvas) ---
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return; // left click only
+    if ((e.target as HTMLElement).closest('.hotspot-edit')) return; // let hotspot handle its own drag
+    if (e.button !== 0) return;
     setIsDragging(true);
     dragStart.current = { x: e.clientX, y: e.clientY };
     panStart.current = { ...pan };
@@ -118,50 +109,80 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging) return;
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
     setPan({
-      x: panStart.current.x + dx,
-      y: panStart.current.y + dy,
+      x: panStart.current.x + (e.clientX - dragStart.current.x),
+      y: panStart.current.y + (e.clientY - dragStart.current.y),
     });
   }, [isDragging]);
 
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+  const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
-  // Handle hotspot click
+  // --- Hotspot click (view mode only) ---
   const handleHotspotClick = useCallback((hotspot: HotspotItem) => {
-    if (isDragging) return; // ignore clicks after drag
+    if (editMode || isDragging) return;
     setSelectedUnit(hotspot);
-  }, [isDragging]);
+  }, [editMode, isDragging]);
 
-  // Close detail panel
-  const handleClosePanel = useCallback(() => {
+  // --- Edit mode handlers ---
+  const toggleEditMode = useCallback(() => {
+    if (editMode && hotspotsDirty) {
+      // Discard changes - reload data
+      setHotspotsDirty(false);
+      apiClient.getFloorPlanRenderData(planId).then(data => {
+        setRenderData(prev => prev ? {
+          ...data,
+          hotspots: data.hotspots || [],
+          image_width: data.image_width || prev.image_width,
+          image_height: data.image_height || prev.image_height,
+        } : null);
+      });
+    }
+    setEditMode(e => !e);
     setSelectedUnit(null);
+  }, [editMode, hotspotsDirty, planId]);
+
+  const handleHotspotUpdate = useCallback((unitId: number, newX: number, newY: number, newW: number, newH: number) => {
+    setRenderData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        hotspots: prev.hotspots.map(hs =>
+          hs.unit_id === unitId ? { ...hs, x: newX, y: newY, w: newW, h: newH } : hs
+        ),
+      };
+    });
+    setHotspotsDirty(true);
   }, []);
 
-  // Get status color
-  const getStatusColor = (hotspot: HotspotItem): string => {
-    return hotspot.status_color || '#94a3b8';
-  };
+  const handleSaveEdits = useCallback(async () => {
+    if (!renderData) return;
+    setSaving(true);
+    try {
+      for (const hs of renderData.hotspots) {
+        await apiClient.updateUnitHotspot(hs.unit_id, {
+          x: hs.x,
+          y: hs.y,
+          width: hs.w,
+          height: hs.h,
+        });
+      }
+      setHotspotsDirty(false);
+      setEditMode(false);
+    } catch (err) {
+      alert('保存失败: ' + (err instanceof Error ? err.message : '未知错误'));
+    } finally {
+      setSaving(false);
+    }
+  }, [renderData]);
+
+  const handleClosePanel = useCallback(() => setSelectedUnit(null), []);
+  const getStatusColor = (h: HotspotItem): string => h.status_color || '#94a3b8';
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center" style={{ height }}>
-        <div className="text-gray-500">加载图纸中...</div>
-      </div>
-    );
+    return <div className="flex items-center justify-center" style={{ height }}><div className="text-gray-500">加载图纸中...</div></div>;
   }
-
   if (error || !renderData) {
-    return (
-      <div className="flex items-center justify-center bg-red-50 rounded-lg" style={{ height }}>
-        <div className="text-red-600">
-          {error || '暂无图纸数据，请先上传楼层平面图'}
-        </div>
-      </div>
-    );
+    return <div className="flex items-center justify-center bg-red-50 rounded-lg" style={{ height }}><div className="text-red-600">{error || '暂无图纸数据'}</div></div>;
   }
 
   const imgW = renderData.image_width || 1200;
@@ -169,143 +190,204 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
 
   return (
     <div className="relative flex gap-4" style={{ height }}>
-      {/* Floor Plan Area */}
+      {/* Canvas */}
       <div
         ref={containerRef}
         className="floor-plan-container flex-1 border rounded-lg overflow-hidden bg-gray-100 relative"
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        style={{ cursor: isDragging ? 'grabbing' : editMode ? 'default' : 'grab' }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {/* Zoom Controls */}
+        {/* Toolbar */}
         <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
-          <button
-            onClick={handleZoomIn}
-            className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold"
-            title="放大"
-          >
-            +
-          </button>
-          <button
-            onClick={handleZoomOut}
-            className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold"
-            title="缩小"
-          >
-            -
-          </button>
-          <button
-            onClick={handleZoomReset}
-            className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-xs"
-            title="适应窗口"
-          >
-            Fit
-          </button>
-          <div className="text-center text-[10px] text-gray-400 mt-1">
-            {Math.round(scale * 100)}%
-          </div>
+          <button onClick={handleZoomIn} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold" title="放大">+</button>
+          <button onClick={handleZoomOut} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold" title="缩小">-</button>
+          <button onClick={handleZoomReset} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-xs" title="适应窗口">Fit</button>
+          <div className="text-center text-[10px] text-gray-400 mt-1">{Math.round(scale * 100)}%</div>
+
+          {editable && (
+            <div className="mt-2 border-t pt-1">
+              <button
+                onClick={toggleEditMode}
+                className={`w-8 h-8 flex items-center justify-center rounded-md shadow-sm border text-xs font-medium ${editMode ? 'bg-camp-600 text-white border-camp-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                title={editMode ? '退出编辑' : '编辑铺位'}
+              >
+                {editMode ? '✕' : '✎'}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Transformable content */}
-        <div
-          className="absolute origin-top-left"
-          style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-            width: imgW,
-            height: imgH,
-          }}
-        >
-          {/* Background Image */}
-          <img
-            src={`${API_BASE}${renderData.image_url}`}
-            alt="楼层平面图"
-            className="block pointer-events-none"
-            draggable={false}
-            style={{ width: imgW, height: imgH }}
-          />
+        {/* Edit mode action bar */}
+        {editMode && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+            <button
+              onClick={toggleEditMode}
+              disabled={!hotspotsDirty}
+              className="px-3 py-1.5 text-sm rounded-md border bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSaveEdits}
+              disabled={!hotspotsDirty || saving}
+              className="px-4 py-1.5 text-sm font-medium rounded-md bg-camp-600 text-white hover:bg-camp-700 disabled:opacity-50 flex items-center gap-1"
+            >
+              {saving ? '保存中...' : '保存修改'}
+            </button>
+          </div>
+        )}
 
-          {/* Hotspot Overlays */}
-          {renderData.hotspots.map((hotspot, index) => (
+        {/* Transformed content */}
+        <div className="absolute origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, width: imgW, height: imgH }}>
+          <img src={`${API_BASE}${renderData.image_url}`} alt="楼层平面图" className="block pointer-events-none" draggable={false} style={{ width: imgW, height: imgH }} />
+
+          {renderData.hotspots.map((hs, i) => (
             <HotspotOverlay
-              key={`hs-${hotspot.unit_id}-${index}`}
-              hotspot={hotspot}
-              imgW={imgW}
-              imgH={imgH}
-              color={getStatusColor(hotspot)}
-              onClick={() => handleHotspotClick(hotspot)}
+              key={`hs-${hs.unit_id}-${i}`}
+              hotspot={hs}
+              color={getStatusColor(hs)}
+              editMode={editMode}
+              onClick={() => handleHotspotClick(hs)}
+              onUpdate={(x, y, w, h) => handleHotspotUpdate(hs.unit_id, x, y, w, h)}
             />
           ))}
         </div>
       </div>
 
       {/* Detail Panel */}
-      {selectedUnit && (
-        <UnitDetailPanel
-          unit={selectedUnit}
-          onClose={handleClosePanel}
-          mallId={mallId}
-        />
+      {selectedUnit && !editMode && (
+        <UnitDetailPanel unit={selectedUnit} onClose={handleClosePanel} mallId={mallId} />
       )}
     </div>
   );
 }
 
-// --- Sub-component: Hotspot Overlay ---
+// ──── Hotspot Overlay (view + edit) ────
 
 interface HotspotOverlayProps {
   hotspot: HotspotItem;
-  imgW: number;
-  imgH: number;
   color: string;
+  editMode: boolean;
   onClick: () => void;
+  onUpdate: (x: number, y: number, w: number, h: number) => void;
 }
 
-function HotspotOverlay({ hotspot, imgW, imgH, color, onClick }: HotspotOverlayProps) {
-  const { x, y, w, h, shape, unit_code, unit_name, tenant_name } = hotspot;
-  const handleClick = useCallback(() => { onClick(); }, [onClick]);
+function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate }: HotspotOverlayProps) {
+  const { x, y, w, h, unit_code, unit_name } = hotspot;
+  const [dragging, setDragging] = useState<'move' | 'resize-nw' | 'resize-ne' | 'resize-sw' | 'resize-se' | 'resize-n' | 'resize-s' | 'resize-w' | 'resize-e' | null>(null);
+  const dragStartPos = useRef({ mx: 0, my: 0, x: 0, y: 0, w: 0, h: 0 });
 
-  // Percentage-based positioning relative to image dimensions
-  const pctStyle: React.CSSProperties = {
-    position: 'absolute',
-    left: x,
-    top: y,
-    width: w,
-    height: h,
-    backgroundColor: `${color}33`,
-    borderColor: color,
-    borderWidth: 2,
-    borderStyle: 'solid',
-    cursor: 'pointer',
-  };
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClick();
+  }, [onClick]);
 
-  if (shape === 'polygon' && hotspot.points) {
+  // Start drag
+  const startDrag = useCallback((mode: typeof dragging, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDragging(mode);
+    dragStartPos.current = { mx: e.clientX, my: e.clientY, x, y, w, h };
+  }, [x, y, w, h]);
+
+  // Mouse move during drag
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      const dx = (e.clientX - dragStartPos.current.mx) / (window as any).__campScale || (e.clientX - dragStartPos.current.mx);
+      const dy = (e.clientY - dragStartPos.current.my) / (window as any).__campScale || (e.clientY - dragStartPos.current.my);
+      const orig = dragStartPos.current;
+
+      switch (dragging) {
+        case 'move':
+          onUpdate(orig.x + dx, orig.y + dy, orig.w, orig.h);
+          break;
+        case 'resize-se':
+          onUpdate(orig.x, orig.y, Math.max(30, orig.w + dx), Math.max(20, orig.h + dy));
+          break;
+        case 'resize-sw':
+          onUpdate(orig.x + dx, orig.y, Math.max(30, orig.w - dx), Math.max(20, orig.h + dy));
+          break;
+        case 'resize-ne':
+          onUpdate(orig.x, orig.y, Math.max(30, orig.w + dx), Math.max(20, orig.h - dy));
+          break;
+        case 'resize-nw':
+          onUpdate(orig.x + dx, orig.y + dy, Math.max(30, orig.w - dx), Math.max(20, orig.h - dy));
+          break;
+        case 'resize-n':
+          onUpdate(orig.x, orig.y + dy, orig.w, Math.max(20, orig.h - dy));
+          break;
+        case 'resize-s':
+          onUpdate(orig.x, orig.y, orig.w, Math.max(20, orig.h + dy));
+          break;
+        case 'resize-w':
+          onUpdate(orig.x + dx, orig.y, Math.max(30, orig.w - dx), orig.h);
+          break;
+        case 'resize-e':
+          onUpdate(orig.x, orig.y, Math.max(30, orig.w + dx), orig.h);
+          break;
+      }
+    };
+    const onUp = () => setDragging(null);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [dragging, onUpdate]);
+
+  // In edit mode: show handles and allow drag
+  if (editMode) {
     return (
-      <svg
-        className="absolute inset-0 pointer-events-none"
-        style={{ overflow: 'visible', width: imgW, height: imgH }}
+      <div
+        className="hotspot-edit absolute group"
+        style={{
+          left: x, top: y, width: w, height: h,
+          backgroundColor: `${color}22`,
+          border: `2px dashed ${color}`,
+          cursor: dragging ? 'grabbing' : 'move',
+        }}
+        onMouseDown={(e) => startDrag('move', e)}
       >
-        <polygon
-          points={hotspot.points.map(p => p.join(',')).join(' ')}
-          fill={`${color}33`}
-          stroke={color}
-          strokeWidth="2"
-          className="cursor-pointer pointer-events-auto hover:brightness-110"
-          onClick={handleClick}
-          style={{ transition: 'all 0.15s ease' }}
-        />
-        <title>{unit_name || unit_code}</title>
-      </svg>
+        {/* Resize handles */}
+        <ResizeHandle cx={0} cy={0} cursor="nw-resize" onStart={(e) => startDrag('resize-nw', e)} />
+        <ResizeHandle cx={0.5} cy={0} cursor="n-resize" onStart={(e) => startDrag('resize-n', e)} />
+        <ResizeHandle cx={1} cy={0} cursor="ne-resize" onStart={(e) => startDrag('resize-ne', e)} />
+        <ResizeHandle cx={1} cy={0.5} cursor="e-resize" onStart={(e) => startDrag('resize-e', e)} />
+        <ResizeHandle cx={1} cy={1} cursor="se-resize" onStart={(e) => startDrag('resize-se', e)} />
+        <ResizeHandle cx={0.5} cy={1} cursor="s-resize" onStart={(e) => startDrag('resize-s', e)} />
+        <ResizeHandle cx={0} cy={1} cursor="sw-resize" onStart={(e) => startDrag('resize-sw', e)} />
+        <ResizeHandle cx={0} cy={0.5} cursor="w-resize" onStart={(e) => startDrag('resize-w', e)} />
+
+        {/* Label */}
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium select-none pointer-events-none text-gray-700">
+          {unit_name || unit_code}
+        </span>
+      </div>
     );
   }
 
+  // View mode: simple clickable overlay
   return (
     <div
-      className="group hover:brightness-90 transition-all duration-150"
-      style={pctStyle}
+      className="absolute group hover:brightness-90 transition-all duration-150"
+      style={{ left: x, top: y, width: w, height: h, backgroundColor: `${color}33`, borderColor: color, borderWidth: 2, borderStyle: 'solid', cursor: 'pointer' }}
       onClick={handleClick}
-      title={`${unit_name || unit_code}${tenant_name ? ` - ${tenant_name}` : ''}`}
+      title={`${unit_name || unit_code}`}
+    />
+  );
+}
+
+// ──── Resize Handle ────
+
+function ResizeHandle({ cx, cy, cursor, onStart }: { cx: number; cy: number; cursor: string; onStart: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      className="absolute w-3 h-3 bg-white border border-camp-600 rounded-full z-10 hover:scale-125 transition-transform"
+      style={{ left: `calc(${cx * 100}% - 6px)`, top: `calc(${cy * 100}% - 6px)`, cursor }}
+      onMouseDown={onStart}
     />
   );
 }

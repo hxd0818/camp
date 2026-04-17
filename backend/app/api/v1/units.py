@@ -80,6 +80,53 @@ async def update_unit(unit_id: int, update: UnitUpdate, db: AsyncSession = Depen
     return unit
 
 
+@router.put("/{unit_id}/hotspot")
+async def update_unit_hotspot(
+    unit_id: int,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a unit's hotspot coordinates (position and size on floor plan)."""
+    result = await db.execute(select(Unit).where(Unit.id == unit_id))
+    unit = result.scalar_one_or_none()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+
+    unit.hotspot_data = data
+    await db.flush()
+
+    # Also update active floor plan hotspot for this unit
+    from app.models.unit import FloorPlan
+    from sqlalchemy import update as sql_update
+
+    fp_result = await db.execute(
+        select(FloorPlan)
+        .where(FloorPlan.floor_id == unit.floor_id, FloorPlan.is_active == True)
+    )
+    active_plan = fp_result.scalar_one_or_none()
+    if active_plan and active_plan.hotspots:
+        updated = False
+        new_hotspots = []
+        for hs in active_plan.hotspots:
+            if hs.get("unit_id") == unit_id:
+                new_hotspots.append({
+                    **hs,
+                    "x": data.get("x", hs.get("x", 0)),
+                    "y": data.get("y", hs.get("y", 0)),
+                    "w": data.get("width", hs.get("w", 100)),
+                    "h": data.get("height", hs.get("h", 80)),
+                })
+                updated = True
+            else:
+                new_hotspots.append(hs)
+        if updated:
+            active_plan.hotspots = new_hotspots
+
+    await db.commit()
+    await db.refresh(unit)
+    return {"id": unit.id, "hotspot_data": unit.hotspot_data}
+
+
 @router.delete("/{unit_id}", status_code=204)
 async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db)):
     """Delete a unit."""

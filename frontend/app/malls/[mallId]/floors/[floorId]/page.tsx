@@ -104,7 +104,7 @@ export default function FloorPlanViewPage() {
             加载中...
           </div>
         ) : activePlanId ? (
-          <FloorPlanViewer planId={activePlanId} mallId={mallId} />
+          <FloorPlanViewer planId={activePlanId} mallId={mallId} editable />
         ) : (
           <NoPlanState floorId={floorId} onUpload={() => {}} />
         )}
