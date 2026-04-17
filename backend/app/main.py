@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.database import init_db
@@ -65,6 +66,12 @@ def create_app() -> FastAPI:
     from app.api.v1 import router as v1_router  # noqa: F401
 
     app.include_router(v1_router, prefix="/api/v1")
+
+    # Serve uploaded files (floor plan images, etc.)
+    import os
+    upload_dir = settings.upload_dir
+    os.makedirs(upload_dir, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
     @app.get("/health")
     async def health_check():

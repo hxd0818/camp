@@ -3,10 +3,13 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models.unit import FloorPlan
+from app.models.unit import FloorPlan, Unit
 from app.models.mall import Floor
+from app.models.contract import Contract
+from app.models.tenant import Tenant
 from app.schemas.unit import FloorPlanCreate, FloorPlanResponse
 
 router = APIRouter()
@@ -136,11 +139,11 @@ async def get_floor_plan_render_data(plan_id: int, db: AsyncSession = Depends(ge
             enriched = dict(hs)
 
             if unit_id:
-                from app.models.unit import Unit
-                from app.models.contract import Contract
-                from app.models.tenant import Tenant
-
-                unit_result = await db.execute(select(Unit).where(Unit.id == unit_id))
+                unit_result = await db.execute(
+                    select(Unit)
+                    .where(Unit.id == unit_id)
+                    .options(selectinload(Unit.current_contract).selectinload(Contract.tenant))
+                )
                 unit = unit_result.scalar_one_or_none()
 
                 if unit:
@@ -151,7 +154,7 @@ async def get_floor_plan_render_data(plan_id: int, db: AsyncSession = Depends(ge
                     # Get current contract info
                     if unit.current_contract:
                         contract = unit.current_contract
-                        enriched["tenant_name"] = contract.tenant.name
+                        enriched["tenant_name"] = contract.tenant.name if contract.tenant else None
                         enriched["contract_status"] = contract.status.value
                         enriched["lease_end"] = contract.lease_end.isoformat()
                         # Determine status color
