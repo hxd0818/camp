@@ -12,6 +12,8 @@ import { apiClient } from '@/lib/api';
 import type { HotspotItem, UnitWithContract } from '@/lib/types';
 import { UnitDetailPanel } from './UnitDetailPanel';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8201';
+
 interface FloorPlanViewerProps {
   planId: number;
   mallId?: number;
@@ -98,7 +100,7 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
         <div className="floor-plan-image relative inline-block">
           {/* Background Image */}
           <img
-            src={renderData.image_url}
+            src={`${API_BASE}${renderData.image_url}`}
             alt="楼层平面图"
             className="block max-w-full"
             draggable={false}
