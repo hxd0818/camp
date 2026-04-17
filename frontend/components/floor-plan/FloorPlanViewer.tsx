@@ -369,14 +369,31 @@ function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate }: Hotspot
     );
   }
 
-  // View mode: simple clickable overlay
+  // View mode: clickable overlay with label (base image has no unit info)
+  const label = unit_name && unit_name !== unit_code ? unit_name : unit_code;
   return (
     <div
-      className="absolute group hover:brightness-90 transition-all duration-150"
-      style={{ left: x, top: y, width: w, height: h, backgroundColor: `${color}33`, borderColor: color, borderWidth: 2, borderStyle: 'solid', cursor: 'pointer' }}
+      className="absolute group hover:brightness-95 transition-all duration-150"
+      style={{
+        left: x, top: y, width: w, height: h,
+        backgroundColor: `${color}30`,
+        border: `2px solid ${color}`,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
       onClick={handleClick}
-      title={`${unit_name || unit_code}`}
-    />
+      title={`${unit_name || unit_code}${hotspot.tenant_name ? ` - ${hotspot.tenant_name}` : ''}`}
+    >
+      <span className="text-[11px] font-medium select-none pointer-events-none text-center leading-tight px-1"
+            style={{ color: '#1e293b', maxWidth: w - 8 }}>
+        {label}
+        {unit_name && unit_name !== unit_code && (
+          <span className="block text-[9px] text-gray-500 mt-0.5">{unit_code}</span>
+        )}
+      </span>
+    </div>
   );
 }
 

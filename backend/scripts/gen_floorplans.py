@@ -1,11 +1,15 @@
-"""Generate professional-looking floor plan images for CAMP demo.
+"""Generate infrastructure-only floor plan base images for CAMP.
 
-Creates PNG images that resemble real commercial building floor plans:
-- Ring-layout corridor with stores along perimeter
-- Central atrium with escalators/elevators
-- Restrooms, fire exits, service areas
-- Unit labels showing store name + code + area
-- Architectural drawing style (clean lines, subtle colors)
+Base image contains ONLY architectural elements:
+- Outer building walls
+- Corridor walkways (ring layout)
+- Central atrium area
+- Escalators, elevators, restrooms
+- Main entrance, fire exits
+- Floor title bar with scale indicator
+
+Store units are rendered as interactive hotspot overlays by the frontend,
+NOT baked into this image. This allows drag-to-edit without regenerating.
 
 Usage (inside container):
     python scripts/gen_floorplans.py
@@ -29,448 +33,392 @@ from sqlalchemy import func
 IMG_WIDTH = 1200
 IMG_HEIGHT = 820
 
-# ── Color palette (professional architectural style) ──────────────
+# ── Color palette (architectural blueprint style) ────────────────
 BG_WHITE = '#ffffff'
-WALL_COLOR = '#1e293b'          # dark slate for walls
-WALL_THICK = 3
-CORRIDOR_FILL = '#f1f5f9'       # very light gray for corridor
-ATRIUM_FILL = '#f8fafc'         # near-white for atrium
-UNIT_FILL_OCCUPIED = '#dcfce7' # very light green
-UNIT_FILL_VACANT = '#fee2e2'    # very light red
-UNIT_FILL_RESERVED = '#f3e8ff'  # very light purple
-UNIT_FILL_MAINTENANCE = '#f1f5f9'  # light gray
-UNIT_BORDER = '#334155'        # dark border for units
-CORRIDOR_BORDER = '#94a3b8'     # medium gray for corridor edges
-TEXT_DARK = '#1e293b'          # primary text
-TEXT_MUTED = '#64748b'         # secondary text (area, code)
-ACCENT_CAMP = '#2563eb'        # blue accent for title/legend
-FACILITY_FILL = '#e2e8f0'      # light gray for facilities (restroom, etc.)
-FACILITY_BORDER = '#94a3b8'
+WALL_COLOR = '#1e293b'
+WALL_THICK = 4
+CORRIDOR_FILL = '#f8fafc'
+ATRIUM_FILL = '#f1f5f9'
+ATRIUM_BORDER = '#cbd5e1'
+TEXT_DARK = '#334155'
+TEXT_MUTED = '#94a3b8'
+ACCENT_CAMP = '#2563eb'
 
-# Status color mapping
-STATUS_FILLS = {
-    'occupied': UNIT_FILL_OCCUPIED,
-    'vacant': UNIT_FILL_VACANT,
-    'reserved': UNIT_FILL_RESERVED,
-    'maintenance': UNIT_FILL_MAINTENANCE,
-}
+# Facility colors
+FACILITY_FILL = '#f1f5f9'
+FACILITY_BORDER = '#94a3b8'
+ESC_LINE = '#cbd5e1'
+ENTRANCE_FILL = '#eff6ff'
+ENTRANCE_BORDER = ACCENT_CAMP
+FIRE_EXIT_FILL = '#fef2f2'
+FIRE_EXIT_BORDER = '#fca5a5'
 
 
 def _load_fonts():
     """Load fonts, falling back gracefully."""
-    font_paths = [
+    paths = [
         '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
         '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-        '/usr/share/fonts/noto/NotoSansCJK-Regular.ttc',
-        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
     ]
     try:
-        font_regular = ImageFont.truetype(font_paths[0], 11)
-        font_bold = ImageFont.truetype(font_paths[1], 13)
-        font_small = ImageFont.truetype(font_paths[0], 9)
-        font_title = ImageFont.truetype(font_paths[1], 16)
+        return (
+            ImageFont.truetype(paths[0], 11),
+            ImageFont.truetype(paths[1], 15),
+            ImageFont.truetype(paths[0], 9),
+            ImageFont.truetype(paths[1], 18),
+        )
     except Exception:
-        default = ImageFont.load_default()
-        font_regular = default
-        font_bold = default
-        font_small = default
-        font_title = default
-    return font_regular, font_bold, font_small, font_title
+        d = ImageFont.load_default()
+        return d, d, d, d
 
 
-def _draw_rounded_rect(draw, coords, radius=4, **kwargs):
-    """Draw a rounded rectangle."""
-    x1, y1, x2, y2 = coords
-    draw.rectangle(coords, **kwargs)
+def _text_size(draw, text, font):
+    b = draw.textbbox((0, 0), text, font=font)
+    return b[2] - b[0], b[3] - b[1]
 
 
-def _compute_text_size(draw, text, font):
-    """Get text bounding box size."""
-    bbox = draw.textbbox((0, 0), text, font=font)
-    return bbox[2] - bbox[0], bbox[3] - bbox[1]
-
-
-def _draw_text_centered(draw, cx, cy, text, font, fill=TEXT_DARK):
-    """Draw text centered at (cx, cy)."""
-    w, h = _compute_text_size(draw, text, font)
+def _text_centered(draw, cx, cy, text, font, fill=TEXT_DARK):
+    w, h = _text_size(draw, text, font)
     draw.text((cx - w / 2, cy - h / 2), text, fill=fill, font=font)
 
 
-def generate_floor_image(units_data: list[dict], floor_number: int) -> bytes:
-    """Generate a professional-looking floor plan PNG image."""
+def generate_base_image(floor_number: int) -> bytes:
+    """Generate an infrastructure-only floor plan base image (NO units)."""
 
     img = Image.new('RGB', (IMG_WIDTH, IMG_HEIGHT), BG_WHITE)
     draw = ImageDraw.Draw(img)
     f_reg, f_bold, f_sml, f_ttl = _load_fonts()
 
-    # ═══ Layout constants ═══
-    margin_l = 20
-    margin_r = 20
-    margin_t = 52      # space for title bar
-    margin_b = 36      # space for legend/scale
-    plan_x = margin_l
-    plan_y = margin_t
-    plan_w = IMG_WIDTH - margin_l - margin_r
-    plan_h = IMG_HEIGHT - margin_t - margin_b
+    # ═══ Plan area ═══
+    mx = 20          # margin left/right
+    mt = 52          # title bar height
+    mb = 28          # bottom info bar height
+    px, py = mx, mt
+    pw = IMG_WIDTH - mx * 2
+    ph = IMG_HEIGHT - mt - mb
 
-    # Corridor width (inner ring)
-    corr_w = 72
+    # Corridor width along perimeter
+    cw = 80
 
     # ── Title bar ──
-    draw.rectangle([0, 0, IMG_WIDTH, margin_t], fill='#f8fafc')
-    draw.line([(0, margin_t - 1), (IMG_WIDTH, margin_t - 1)], fill='#e2e8f0')
-    floor_names = {1: 'L1 / 1F', 2: 'L2 / 2F', 3: 'L3 / 3F', 4: 'L4 / 4F', 5: 'L5 / 5F'}
-    title = f'Sunshine Plaza  {floor_names.get(floor_number, str(floor_number) + "F")}'
-    draw.text((16, 16), title, fill=TEXT_DARK, font=f_ttl)
+    draw.rectangle([0, 0, IMG_WIDTH, mt], fill='#f8fafc')
+    draw.line([(0, mt - 1), (IMG_WIDTH, mt - 1)], fill='#e2e8f0')
+    names = {1: 'L1 / 1F', 2: 'L2 / 2F', 3: 'L3 / 3F', 4: 'L4 / 4F', 5: 'L5 / 5F'}
+    title = f'Sunshine Plaza   {names.get(floor_number, str(floor_number) + "F")}'
+    draw.text((20, 15), title, fill=TEXT_DARK, font=f_ttl)
 
-    # Subtitle right-aligned
-    sub = f'Total Units: {len(units_data)}'
-    sw, sh = _compute_text_size(draw, sub, f_reg)
-    draw.text((IMG_WIDTH - sw - 16, 18), sub, fill=TEXT_MUTED, font=f_reg)
+    # Scale indicator right side
+    scale_text = f'1 : {200 - floor_number * 10}'
+    sw, _ = _text_size(draw, scale_text, f_reg)
+    draw.text((IMG_WIDTH - sw - 16, 17), scale_text, fill=TEXT_MUTED, font=f_reg)
 
-    # ── Draw outer building wall ──
+    # Compass hint
+    draw.text((IMG_WIDTH // 2 - 10, 14), 'N', fill=ACCENT_CAMP, font=f_bold)
+
+    # ── Outer wall (thick) ──
     draw.rectangle(
-        [plan_x, plan_y, plan_x + plan_w, plan_y + plan_h],
+        [px, py, px + pw, py + ph],
         outline=WALL_COLOR, width=WALL_THICK
     )
 
-    # ── Compute unit positions based on floor layout ──
-    unit_rects = _layout_units(units_data, plan_x, plan_y, plan_w, plan_h, corr_w)
+    # ── Inner structural columns (dots at corners of inner area) ──
+    ix = px + cw
+    iy = py + cw
+    iw = pw - 2 * cw
+    ih = ph - 2 * cw
+    col_r = 6
+    for corner in [(ix, iy), (ix + iw, iy), (ix, iy + ih), (ix + iw, iy + ih)]:
+        cx_, cy_ = corner
+        draw.ellipse(
+            [cx_ - col_r, cy_ - col_r, cx_ + col_r, cy_ + col_r],
+            fill=WALL_COLOR
+        )
 
-    # ── Draw corridor (the inner walkway area) ──
-    _draw_corridor(draw, unit_rects, plan_x, plan_y, plan_w, plan_h, corr_w)
+    # ── Corridor ring (perimeter walkway) ──
+    # Top corridor
+    draw.rectangle([px, py, px + pw, py + cw], fill=CORRIDOR_FILL)
+    # Bottom corridor
+    draw.rectangle([px, py + ph - cw, px + pw, py + ph], fill=CORRIDOR_FILL)
+    # Left corridor
+    draw.rectangle([px, py, px + cw, py + ph], fill=CORRIDOR_FILL)
+    # Right corridor
+    draw.rectangle([px + pw - cw, py, px + pw, py + ph], fill=CORRIDOR_FILL)
 
-    # ── Draw facilities (escalators, elevators, restrooms) ──
-    _draw_facilities(draw, plan_x, plan_y, plan_w, plan_h, corr_w, f_reg, f_sml)
+    # Corner fills (round out corridor corners)
+    csz = cw + 8
+    draw.rectangle([px, py, px + csz, py + csz], fill=CORRIDOR_FILL)
+    draw.rectangle([px + pw - csz, py, px + pw, py + csz], fill=CORRIDOR_FILL)
+    draw.rectangle([px, py + ph - csz, px + csz, py + ph], fill=CORRIDOR_FILL)
+    draw.rectangle([px + pw - csz, py + ph - csz, px + pw, py + ph], fill=CORRIDOR_FILL)
 
-    # ── Draw each unit ──
-    for ur in unit_rects:
-        _draw_unit(draw, ur, f_bold, f_reg, f_sml)
+    # Corridor center line (subtle guide)
+    cl_off = cw // 2
+    draw.line([(px + cl_off, py + cw), (px + cl_off, py + ph - cw)], fill='#e2e8f0', width=1)
+    draw.line([(px + pw - cl_off, py + cw), (px + pw - cl_off, py + ph - cw)], fill='#e2e8f0', width=1)
+    draw.line([(px + cw, py + cl_off), (px + pw - cw, py + cl_off)], fill='#e2e8f0', width=1)
+    draw.line([(px + cw, py + ph - cl_off), (px + pw - cw, py + ph - cl_off)], fill='#e2e8f0', width=1)
 
-    # ── Legend bar at bottom ──
-    _draw_legend(draw, IMG_WIDTH, IMG_HEIGHT, margin_b, f_reg)
+    # ── Central Atrium ──
+    ax = px + cw + 16
+    ay = py + cw + 16
+    aw = pw - 2 * cw - 32
+    ah = ph - 2 * cw - 32
+    draw.rectangle([ax, ay, ax + aw, ay + ah], fill=ATRIUM_FILL, outline=ATRIUM_BORDER, width=1)
+
+    # Atrium decorative pattern (subtle cross lines)
+    mid_ax = ax + aw // 2
+    mid_ay = ay + ah // 2
+    draw.line([(mid_ax, ay + 10), (mid_ax, ay + ah - 10)], fill='#e2e8f0', width=1)
+    draw.line([(ax + 10, mid_ay), (ax + aw - 10, mid_ay)], fill='#e2e8f0', width=1)
+
+    # Atrium label (watermark style)
+    _text_centered(draw, mid_ax, mid_ay, 'ATRIUM', f_sml, fill='#d1d5db')
+
+    # ── Facilities ──
+    mid_x = px + pw // 2
+    mid_y = py + ph // 2
+
+    # Escalator (center-left of atrium)
+    esc_w = 32
+    esc_h = 100
+    ex = mid_x - esc_w - 24
+    ey = mid_y - esc_h // 2
+    draw.rectangle([ex, ey, ex + esc_w, ey + esc_h],
+                   fill=FACILITY_FILL, outline=FACILITY_BORDER, width=1)
+    # Step lines
+    for i in range(7):
+        sy = ey + 12 + i * 12
+        draw.line([(ex + 5, sy), (ex + esc_w - 5, sy)], fill=ESC_LINE, width=1)
+    # Arrow indicators
+    tri_y_top = ey + 6
+    tri_y_bot = ey + esc_h - 8
+    draw.polygon([(ex + esc_w // 2, tri_y_top),
+                   (ex + esc_w // 2 - 5, tri_y_top + 8),
+                   (ex + esc_w // 2 + 5, tri_y_top + 8)],
+                  fill=ESC_LINE)
+    draw.polygon([(ex + esc_w // 2, tri_y_bot + 8),
+                   (ex + esc_w // 2 - 5, tri_y_bot),
+                   (ex + esc_w // 2 + 5, tri_y_bot)],
+                  fill=ESC_LINE)
+    _text_centered(draw, ex + esc_w / 2, ey + esc_h + 10, 'ESC', f_sml, fill=TEXT_MUTED)
+
+    # Elevator bank (center-right of atrium)
+    elv_x = mid_x + 24
+    elv_y = mid_y - 22
+    elv_sz = 36
+    draw.rectangle([elv_x, elv_y, elv_x + elv_sz, elv_y + elv_sz],
+                   fill=FACILITY_FILL, outline=FACILITY_BORDER, width=1)
+    # Two elevator boxes inside
+    box_gap = 4
+    box_sz = (elv_sz - box_gap) // 2
+    draw.rectangle([elv_x + 4, elv_y + 4, elv_x + 4 + box_sz, elv_y + 4 + box_sz],
+                   outline='#94a3b8', width=1)
+    draw.rectangle([elv_x + 4 + box_sz + box_gap, elv_y + 4,
+                   elv_x + 4 + box_sz + box_gap + box_sz, elv_y + 4 + box_sz],
+                   outline='#94a3b8', width=1)
+    _text_centered(draw, elv_x + elv_sz / 2, elv_y + elv_sz + 10, 'ELEV', f_sml, fill=TEXT_MUTED)
+
+    # Restrooms (left of escalator)
+    rr_x = ex - 36
+    rr_y = mid_y - 22
+    rr_sz = 36
+    draw.rectangle([rr_x, rr_y, rr_x + rr_sz, rr_y + rr_sz],
+                   fill=FACILITY_FILL, outline=FACILITY_BORDER, width=1)
+    # WC symbols (M/F split)
+    half = rr_sz // 2 - 2
+    draw.rectangle([rr_x + 3, rr_y + 3, rr_x + 3 + half, rr_y + 3 + half],
+                   outline='#a1a1aa', width=1)
+    draw.rectangle([rr_x + 3 + half + 4, rr_y + 3,
+                   rr_x + 3 + half + 4 + half, rr_y + 3 + half],
+                   outline='#a1a1aa', width=1)
+    _text_centered(draw, rr_x + 3 + half / 2, rr_y + 3 + half / 2, 'M', f_sml, fill=TEXT_MUTED)
+    _text_centered(draw, rr_x + 3 + half + 4 + half / 2, rr_y + 3 + half / 2, 'F', f_sml, fill=TEXT_MUTED)
+    _text_centered(draw, rr_x + rr_sz / 2, rr_y + rr_sz + 8, 'WC', f_sml, fill=TEXT_MUTED)
+
+    # Main entrance (bottom center, breaks outer wall)
+    ent_w = 90
+    ent_h = WALL_THICK + 4
+    ent_x = mid_x - ent_w // 2
+    ent_y = py + ph - WALL_THICK - 2
+    # Door opening (break in wall)
+    draw.rectangle([ent_x - 4, ent_y - 4, ent_x + ent_w + 4, ent_y + ent_h + 4],
+                   fill=ENTRANCE_FILL, outline=ENTRANCE_BORDER, width=1)
+    # Door swing arc (suggestive) - draw as simple curve
+    swing_pts = [
+        (ent_x + ent_w - 4, ent_y),
+        (ent_x + ent_w + 20, ent_y - 20),
+        (ent_x + ent_w + 40, ent_y),
+    ]
+    if len(swing_pts) >= 2:
+        draw.line(swing_pts, fill=ACCENT_CAMP, width=1)
+    _text_centered(draw, mid_x, ent_y + ent_h / 2, 'MAIN ENTRANCE', f_sml, fill=ACCENT_CAMP)
+
+    # Secondary entrance (top center)
+    sec_ent_w = 60
+    sec_ent_x = mid_x - sec_ent_w // 2
+    sec_ent_y = py - 2
+    draw.rectangle([sec_ent_x - 3, sec_ent_y - 3, sec_ent_x + sec_ent_w + 3, sec_ent_y + WALL_THICK + 3],
+                   fill=ENTRANCE_FILL, outline=FACILITY_BORDER, width=1)
+    _text_centered(draw, mid_x, sec_ent_y + 4, 'ENTRY', f_sml, fill=TEXT_MUTED)
+
+    # Fire exit markers (all four corners, outside wall)
+    fe_w = 26
+    fe_h = 12
+    fe_margin = 4
+    # Top-left (outside top-left corner)
+    draw.rectangle([px - fe_margin - fe_w, py - fe_margin - fe_h,
+                    px - fe_margin, py - fe_margin],
+                   fill=FIRE_EXIT_FILL, outline=FIRE_EXIT_BORDER, width=1)
+    _text_centered(draw, px - fe_margin - fe_w / 2, py - fe_margin - fe_h / 2, 'EXIT', f_sml, fill='#ef4444')
+    # Top-right
+    draw.rectangle([px + pw + fe_margin, py - fe_margin - fe_h,
+                    px + pw + fe_margin + fe_w, py - fe_margin],
+                   fill=FIRE_EXIT_FILL, outline=FIRE_EXIT_BORDER, width=1)
+    _text_centered(draw, px + pw + fe_margin + fe_w / 2, py - fe_margin - fe_h / 2, 'EXIT', f_sml, fill='#ef4444')
+    # Bottom-left
+    draw.rectangle([px - fe_margin - fe_w, py + ph + fe_margin,
+                    px - fe_margin, py + ph + fe_margin + fe_h],
+                   fill=FIRE_EXIT_FILL, outline=FIRE_EXIT_BORDER, width=1)
+    _text_centered(draw, px - fe_margin - fe_w / 2, py + ph + fe_margin + fe_h / 2, 'EXIT', f_sml, fill='#ef4444')
+    # Bottom-right
+    draw.rectangle([px + pw + fe_margin, py + ph + fe_margin,
+                    px + pw + fe_margin + fe_w, py + ph + fe_margin + fe_h],
+                   fill=FIRE_EXIT_FILL, outline=FIRE_EXIT_BORDER, width=1)
+    _text_centered(draw, px + pw + fe_margin + fe_w / 2, py + ph + fe_margin + fe_h / 2, 'EXIT', f_sml, fill='#ef4444')
+
+    # Service/stairwell indicators (small squares in corridor areas)
+    svc_sz = 22
+    # Top-right corridor
+    draw.rectangle([px + pw - cw - svc_sz - 8, py + 8,
+                    px + pw - cw - 8, py + 8 + svc_sz],
+                   fill='#fafafa', outline='#d4d4d8', width=1)
+    _text_centered(draw, px + pw - cw - 8 - svc_sz / 2, py + 8 + svc_sz / 2, 'STAIR', f_sml, fill='#d4d4d8')
+    # Bottom-left corridor
+    draw.rectangle([px + cw + 8, py + ph - 8 - svc_sz,
+                    px + cw + 8 + svc_sz, py + ph - 8],
+                   fill='#fafafa', outline='#d4d4d8', width=1)
+    _text_centered(draw, px + cw + 8 + svc_sz / 2, py + ph - 8 - svc_sz / 2, 'STAIR', f_sml, fill='#d4d4d8')
+
+    # ── Bottom info bar ──
+    draw.rectangle([0, IMG_HEIGHT - mb, IMG_WIDTH, IMG_HEIGHT], fill='#f8fafc')
+    draw.line([(0, IMG_HEIGHT - mb), (IMG_WIDTH, IMG_HEIGHT - mb)], fill='#e2e8f0')
+
+    # Info text left
+    draw.text((16, IMG_HEIGHT - mb + 7), f'Floor Area: ~{9000 - floor_number * 200} m²',
+              fill=TEXT_MUTED, font=f_reg)
+    # Info text right
+    info_right = f'CAMP v0.1 | Infrastructure Base Map'
+    iw2, _ = _text_size(draw, info_right, f_reg)
+    draw.text((IMG_WIDTH - iw2 - 16, IMG_HEIGHT - mb + 7), info_right,
+              fill=TEXT_MUTED, font=f_reg)
 
     buf = BytesIO()
     img.save(buf, format='PNG')
     return buf.getvalue()
 
 
-def _layout_units(units_data, px, py, pw, ph, corr_w):
-    """Compute unit rectangles in a ring layout around the corridor.
+# ──── Unit layout computation (for initial hotspot placement) ────
 
-    Returns list of dicts with rect coords + unit data.
+def compute_unit_layout(units_data: list[dict]) -> list[dict]:
+    """Compute initial unit positions along the corridor perimeter.
+
+    Returns list of dicts with {x, y, w, h, unit_data}.
+    This is used ONLY to set initial hotspot coordinates.
     """
     n = len(units_data)
     if n == 0:
         return []
 
+    mx, my = 20, 52
+    mw, mh = IMG_WIDTH - 40, IMG_HEIGHT - 80  # plan area
+    cw = 80  # corridor width
+
     rects = []
-    inner_x = px + corr_w
-    inner_y = py + corr_w
-    inner_w = pw - 2 * corr_w
-    inner_h = ph - 2 * corr_w
+    inner_x = mx + cw
+    inner_y = my + cw
+    inner_w = mw - 2 * cw
+    inner_h = mh - 2 * cw
 
-    # Determine which sides get units based on count
-    # Strategy: distribute units along top, right, bottom, left walls
-
-    # Calculate how many units per side
+    # Distribute units: top/bottom get horizontal strips, sides get vertical
     top_units = []
-    right_units = []
-    bottom_units = []
+    bot_units = []
     left_units = []
+    right_units = []
 
     if n <= 4:
-        # Few units: one per side max, some sides empty
-        sides = ['top', 'right', 'bottom', 'left']
         for i, u in enumerate(units_data):
-            side = sides[i % 4]
-            {'top': top_units, 'right': right_units,
-             'bottom': bottom_units, 'left': left_units}[side].append(u)
+            [top_units, right_units, bot_units, left_units][i % 4].append(u)
     elif n <= 8:
-        # Medium: 2 per side
-        per_side = (n + 3) // 4
+        ps = max((n + 3) // 4, 1)
         for i, u in enumerate(units_data):
-            sidx = min(i // max(per_side, 1), 3)
-            side = ['top', 'right', 'bottom', 'left'][sidx]
-            {'top': top_units, 'right': right_units,
-             'bottom': bottom_units, 'left': left_units}[side].append(u)
+            [top_units, right_units, bot_units, left_units][min(i // ps, 3)].append(u)
     else:
-        # Many: distribute proportionally by available width
         half = (n + 1) // 2
         top_units = units_data[:half]
-        bottom_units = units_data[half:]
+        bot_units = units_data[half:]
 
-    # Place top units
+    gap = 6
+    pad = 4
+
+    # Top row
     if top_units:
-        usable_w = inner_w - 10  # small gaps between units
-        total_ratio = sum(_unit_width_weight(u) for u in top_units)
-        cx = inner_x + 5
+        usable = inner_w - pad * 2
+        total_wt = sum(_area_weight(u) for u in top_units)
+        cx = inner_x + pad
         for u in top_units:
-            w = int(usable_w * (_unit_width_weight(u) / total_ratio))
-            w = max(w, 100)
-            h = corr_w - 4
-            rects.append({
-                'rect': (cx, py + 2, cx + w, py + 2 + h),
-                'data': u,
-                'side': 'top',
-            })
-            cx += w + 6
+            w = max(int(usable * (_area_weight(u) / total_wt)), 80)
+            h = cw - pad * 2
+            rects.append({'x': cx, 'y': my + pad, 'w': w, 'h': h, 'data': u})
+            cx += w + gap
 
-    # Place right units
+    # Bottom row
+    if bot_units:
+        usable = inner_w - pad * 2
+        total_wt = sum(_area_weight(u) for u in bot_units)
+        cx = inner_x + pad
+        for u in bot_units:
+            w = max(int(usable * (_area_weight(u) / total_wt)), 80)
+            h = cw - pad * 2
+            rects.append({'x': cx, 'y': my + mh - cw - pad, 'w': w, 'h': h, 'data': u})
+            cx += w + gap
+
+    # Right column
     if right_units:
-        usable_h = inner_h - 10
-        total_ratio = sum(_unit_height_weight(u) for u in right_units)
-        cy = inner_y + 5
+        usable = inner_h - pad * 2
+        total_wt = sum(_area_weight(u) for u in right_units)
+        cy = inner_y + pad
         for u in right_units:
-            h = int(usable_h * (_unit_height_weight(u) / total_ratio))
-            h = max(h, 80)
-            w = corr_w - 4
-            rects.append({
-                'rect': (px + pw - corr_w + 2, cy, px + pw - 2, cy + h),
-                'data': u,
-                'side': 'right',
-            })
-            cy += h + 6
+            uh = max(int(usable * (_area_weight(u) / total_wt)), 60)
+            uw = cw - pad * 2
+            rects.append({'x': mx + mw - cw - pad, 'y': cy, 'w': uw, 'h': uh, 'data': u})
+            cy += uh + gap
 
-    # Place bottom units
-    if bottom_units:
-        usable_w = inner_w - 10
-        total_ratio = sum(_unit_width_weight(u) for u in bottom_units)
-        cx = inner_x + 5
-        for u in bottom_units:
-            w = int(usable_w * (_unit_width_weight(u) / total_ratio))
-            w = max(w, 100)
-            h = corr_w - 4
-            rects.append({
-                'rect': (cx, py + ph - corr_w - 2, cx + w, py + ph - 2),
-                'data': u,
-                'side': 'bottom',
-            })
-            cx += w + 6
-
-    # Place left units
+    # Left column
     if left_units:
-        usable_h = inner_h - 10
-        total_ratio = sum(_unit_height_weight(u) for u in left_units)
-        cy = inner_y + 5
+        usable = inner_h - pad * 2
+        total_wt = sum(_area_weight(u) for u in left_units)
+        cy = inner_y + pad
         for u in left_units:
-            h = int(usable_h * (_unit_height_weight(u) / total_ratio))
-            h = max(h, 80)
-            w = corr_w - 4
-            rects.append({
-                'rect': (px + 2, cy, px + 2 + w, cy + h),
-                'data': u,
-                'side': 'left',
-            })
-            cy += h + 6
+            uh = max(int(usable * (_area_weight(u) / total_wt)), 60)
+            uw = cw - pad * 2
+            rects.append({'x': mx + pad, 'y': cy, 'w': uw, 'h': uh, 'data': u})
+            cy += uh + gap
 
     return rects
 
 
-def _unit_width_weight(u):
-    """Width weight based on area (anchor stores wider)."""
-    area = u.get('area', 100) or 100
-    layout = u.get('layout_type', 'retail')
-    if layout == 'anchor':
-        return area * 2.5
-    elif layout == 'kiosk':
-        return area * 0.4
-    return area * 1.0
-
-
-def _unit_height_weight(u):
-    """Height weight based on area."""
-    area = u.get('area', 100) or 100
-    layout = u.get('layout_type', 'retail')
-    if layout == 'anchor':
-        return area * 2.0
-    return area * 1.0
-
-
-def _draw_corridor(draw, unit_rects, px, py, pw, ph, corr_w):
-    """Draw the corridor area (walkway between outer wall and units)."""
-    # Fill corridor background
-    # Top corridor strip
-    draw.rectangle([px, py, px + pw, py + corr_w], fill=CORRIDOR_FILL)
-    # Bottom corridor strip
-    draw.rectangle([px, py + ph - corr_w, px + pw, py + ph], fill=CORRIDOR_FILL)
-    # Left corridor strip
-    draw.rectangle([px, py, px + corr_w, py + ph], fill=CORRIDOR_FILL)
-    # Right corridor strip
-    draw.rectangle([px + pw - corr_w, py, px + pw, py + ph], fill=CORRIDOR_FILL)
-
-    # Inner corners (round off corridor visually)
-    corner_sz = corr_w + 4
-    # Top-left corner fill
-    draw.rectangle([px, py, px + corner_sz, py + corner_sz], fill=CORRIDOR_FILL)
-    # Top-right corner fill
-    draw.rectangle([px + pw - corner_sz, py, px + pw, py + corner_sz], fill=CORRIDOR_FILL)
-    # Bottom-left corner fill
-    draw.rectangle([px, py + ph - corner_sz, px + corner_sz, py + ph], fill=CORRIDOR_FILL)
-    # Bottom-right corner fill
-    draw.rectangle([px + pw - corner_sz, py + ph - corner_sz, px + pw, py + ph], fill=CORRIDOR_FILL)
-
-    # Center atrium area
-    ax = px + corr_w + 12
-    ay = py + corr_w + 12
-    aw = pw - 2 * corr_w - 24
-    ah = ph - 2 * corr_w - 24
-    draw.rectangle([ax, ay, ax + aw, ay + ah], fill=ATRIUM_FILL, outline=CORRIDOR_BORDER, width=1)
-
-    # Atrium label
-    try:
-        f_sml = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 9)
-    except Exception:
-        f_sml = ImageFont.load_default()
-    _draw_text_centered(draw, ax + aw / 2, ay + ah / 2, 'ATRIUM', f_sml, fill='#cbd5e1')
-
-
-def _draw_facilities(draw, px, py, pw, ph, corr_w, f_reg, f_sml):
-    """Draw escalators, elevators, restrooms, entrance."""
-    mid_x = px + pw // 2
-    mid_y = py + ph // 2
-
-    # Escalator box (center of atrium, vertical)
-    esc_w = 28
-    esc_h = 90
-    esc_x = mid_x - esc_w // 2
-    esc_y = mid_y - esc_h // 2
-    draw.rectangle([esc_x, esc_y, esc_x + esc_w, esc_y + esc_h],
-                   fill=FACILITY_FILL, outline=FACILITY_BORDER, width=1)
-    # Escalator steps (lines)
-    for i in range(6):
-        sy = esc_y + 10 + i * 13
-        draw.line([(esc_x + 4, sy), (esc_x + esc_w - 4, sy)], fill='#cbd5e1')
-    _draw_text_centered(draw, esc_x + esc_w / 2, esc_y + esc_h + 8, 'ESC', f_sml, fill=TEXT_MUTED)
-
-    # Elevator (right of escalator)
-    elv_x = esc_x + esc_w + 14
-    elv_y = mid_y - 18
-    elv_sz = 30
-    draw.rectangle([elv_x, elv_y, elv_x + elv_sz, elv_y + elv_sz],
-                   fill=FACILITY_FILL, outline=FACILITY_BORDER, width=1)
-    draw.line([(elv_x + elv_sz // 2, elv_y + 4), (elv_x + elv_sz // 2, elv_y + elv_sz - 4)],
-              fill='#94a3b8', width=1)
-    draw.line([(elv_x + 4, elv_y + elv_sz // 2), (elv_x + elv_sz - 4, elv_y + elv_sz // 2)],
-              fill='#94a3b8', width=1)
-    _draw_text_centered(draw, elv_x + elv_sz / 2, elv_y + elv_sz + 8, 'ELEV', f_sml, fill=TEXT_MUTED)
-
-    # Restroom (left of escalator)
-    rr_x = esc_x - 14 - 30
-    rr_y = mid_y - 18
-    rr_sz = 30
-    draw.rectangle([rr_x, rr_y, rr_x + rr_sz, rr_y + rr_sz],
-                   fill=FACILITY_FILL, outline=FACILITY_BORDER, width=1)
-    _draw_text_centered(draw, rr_x + rr_sz / 2, rr_y + rr_sz / 2 - 4, 'WC', f_sml, fill=TEXT_MUTED)
-
-    # Main entrance (bottom center)
-    ent_w = 80
-    ent_h = 14
-    ent_x = mid_x - ent_w // 2
-    ent_y = py + ph - ent_h
-    draw.rectangle([ent_x, ent_y, ent_x + ent_w, ent_y + ent_h],
-                   fill='#dbeafe', outline=ACCENT_CAMP, width=1)
-    _draw_text_centered(draw, mid_x, ent_y + ent_h / 2, 'MAIN ENTRANCE', f_sml, fill=ACCENT_CAMP)
-
-    # Fire exit markers (corners)
-    fe_sz = 22
-    # Top-left
-    draw.rectangle([px + 4, py + 4, px + 4 + fe_sz, py + 4 + fe_sz // 2],
-                   fill='#fef2f2', outline='#fca5a5', width=1)
-    # Top-right
-    draw.rectangle([px + pw - 4 - fe_sz, py + 4, px + pw - 4, py + 4 + fe_sz // 2],
-                   fill='#fef2f2', outline='#fca5a5', width=1)
-
-
-def _draw_unit(draw, ur, f_bold, f_reg, f_sml):
-    """Draw a single unit rectangle with label."""
-    x1, y1, x2, y2 = ur['rect']
-    u = ur['data']
-    status = u.get('status', 'vacant')
-
-    # Fill color based on status
-    fill = STATUS_FILLS.get(status, UNIT_FILL_VACANT)
-
-    # Unit body
-    draw.rectangle([x1, y1, x2, y2], fill=fill, outline=UNIT_BORDER, width=1)
-
-    # Door opening (small gap in the wall facing corridor)
-    door_w = min(24, (x2 - x1) // 3)
-    door_h = 3
-    side = ur['side']
-    if side == 'top':
-        dx = (x1 + x2) // 2 - door_w // 2
-        draw.rectangle([dx, y2 - door_h, dx + door_w, y2 + 2], fill=CORRIDOR_FILL)
-    elif side == 'bottom':
-        dx = (x1 + x2) // 2 - door_w // 2
-        draw.rectangle([dx, y1 - 2, dx + door_w, y1 + door_h], fill=CORRIDOR_FILL)
-    elif side == 'left':
-        dy = (y1 + y2) // 2 - door_w // 2
-        draw.rectangle([x2 - door_h, dy, x2 + 2, dy + door_w], fill=CORRIDOR_FILL)
-    elif side == 'right':
-        dy = (y1 + y2) // 2 - door_w // 2
-        draw.rectangle([x1 - 2, dy, x1 + door_h, dy + door_w], fill=CORRIDOR_FILL)
-
-    # Unit label
-    name = u.get('name', '')
-    code = u.get('code', '')
-    area = u.get('area')
-
-    uw = x2 - x1
-    uh = y2 - y1
-
-    # Store name (bold, centered)
-    if uh > 24:
-        # Truncate long names to fit
-        display_name = name
-        nw, nh = _compute_text_size(draw, display_name, f_bold)
-        max_name_w = uw - 8
-        while nw > max_name_w and len(display_name) > 3:
-            display_name = display_name[:-1]
-            nw, nh = _compute_text_size(draw, display_name + '..', f_bold)
-        if nw > max_name_w:
-            display_name = name[:max(3, max_name_w // 8)] + '..'
-
-        _draw_text_centered(draw, (x1 + x2) / 2, (y1 + y2) / 2 - 7, display_name, f_bold, fill=TEXT_DARK)
-
-        # Code below name
-        _draw_text_centered(draw, (x1 + x2) / 2, (y1 + y2) / 2 + 7, code, f_sml, fill=TEXT_MUTED)
-
-        # Area if room
-        if area and uh > 38:
-            _draw_text_centered(draw, (x1 + x2) / 2, (y1 + y2) / 2 + 19, f'{area}m²', f_sml, fill=TEXT_MUTED)
-    else:
-        # Small unit: just show code
-        _draw_text_centered(draw, (x1 + x2) / 2, (y1 + y2) / 2, code, f_sml, fill=TEXT_DARK)
-
-
-def _draw_legend(draw, img_w, img_h, margin_b, f_reg):
-    """Draw status legend at the bottom of the image."""
-    ly = img_h - margin_b + 6
-    items = [
-        ('#22c55e', 'Occupied'),
-        ('#ef4444', 'Vacant'),
-        ('#a855f7', 'Reserved'),
-        ('#6b7280', 'Maintenance'),
-    ]
-
-    # Total legend width
-    total_lw = sum(_compute_text_size(draw, lbl, f_reg)[0] for _, lbl in items)
-    total_lw += len(items) * 28  # color boxes + spacing
-    start_x = (img_w - total_lw) // 2
-
-    cx = start_x
-    for color, label in items:
-        # Color swatch
-        draw.rectangle([cx, ly, cx + 12, ly + 12], fill=color, outline='#cbd5e1')
-        # Label
-        draw.text((cx + 16, ly - 1), label, fill=TEXT_MUTED, font=f_reg)
-        lw, _ = _compute_text_size(draw, label, f_reg)
-        cx += 16 + lw + 20
+def _area_weight(u):
+    a = u.get('area', 100) or 100
+    lt = u.get('layout_type', 'retail')
+    if lt == 'anchor':
+        return a * 2.5
+    elif lt == 'kiosk':
+        return a * 0.4
+    return a
 
 
 async def main():
-    """Generate floor plans for floors that have units with hotspot data."""
+    """Generate infrastructure base images + create FloorPlan records with hotspots."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Unit.floor_id, func.count().label('unit_count'))
@@ -504,7 +452,7 @@ async def main():
                 print(f"Floor {floor_id}: no units with hotspot data")
                 continue
 
-            # Build unit data list
+            # Build unit data for layout computation
             units_data = []
             for u in units:
                 hd = u.hotspot_data or {}
@@ -518,11 +466,10 @@ async def main():
                     'hotspot_data': hd,
                 })
 
-            # Generate image
-            print(f"Generating floor plan for F{floor_id} ({unit_count} units)...")
-            image_bytes = generate_floor_image(units_data, floor_id)
+            # Generate INFRASTRUCTURE-ONLY base image (no units!)
+            print(f"Generating base map for F{floor_id} ({unit_count} units)...")
+            image_bytes = generate_base_image(floor_id)
 
-            # Save image
             filename = f'floor_{floor_id}_plan.png'
             filepath = upload_dir / filename
             with open(filepath, 'wb') as f:
@@ -536,9 +483,20 @@ async def main():
                 {'fid': floor_id}
             )
 
-            # Build hotspots from computed layout (we need to map unit positions)
-            # Since the image generator computes layout dynamically, we re-compute here
-            hotspots = _build_hotspots_from_layout(units_data, floor_id)
+            # Compute initial hotspot positions from layout algorithm
+            layout_rects = compute_unit_layout(units_data)
+            hotspots = []
+            for lr in layout_rects:
+                u = lr['data']
+                hotspots.append({
+                    'unit_id': u['id'],
+                    'unit_code': u['code'],
+                    'x': lr['x'],
+                    'y': lr['y'],
+                    'w': lr['w'],
+                    'h': lr['h'],
+                    'shape': 'rect',
+                })
 
             from app.models.unit import FloorPlan
             fp = FloorPlan(
@@ -552,38 +510,10 @@ async def main():
             )
             db.add(fp)
             await db.commit()
-            print(f"  Created FloorPlan record: {fp.id}")
+            print(f"  Created FloorPlan record: {fp.id} ({len(hotspots)} hotspots)")
 
-    print("\nDone! Floor plans generated successfully.")
-
-
-def _build_hotspots_from_layout(units_data, floor_number):
-    """Build hotspot coordinates matching the visual layout in the image."""
-    margin_l, margin_r = 20, 20
-    margin_t, margin_b = 52, 36
-    plan_x = margin_l
-    plan_y = margin_t
-    plan_w = IMG_WIDTH - margin_l - margin_r
-    plan_h = IMG_HEIGHT - margin_t - margin_b
-    corr_w = 72
-
-    unit_rects = _layout_units(units_data, plan_x, plan_y, plan_w, plan_h, corr_w)
-
-    hotspots = []
-    for i, ur in enumerate(unit_rects):
-        x1, y1, x2, y2 = ur['rect']
-        u = ur['data']
-        hd = u.get('hotspot_data', {})
-        hotspots.append({
-            'unit_id': u['id'],
-            'unit_code': u['code'],
-            'x': x1,
-            'y': y1,
-            'w': x2 - x1,
-            'h': y2 - y1,
-            'shape': 'rect',
-        })
-    return hotspots
+    print("\nDone! Infrastructure base maps generated successfully.")
+    print("Units are rendered as interactive overlay hotspots (not baked into image).")
 
 
 if __name__ == '__main__':
