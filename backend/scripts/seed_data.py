@@ -189,6 +189,8 @@ async def seed():
         )
         active_contracts = active_contracts_result.scalars().all()
 
+        # Create invoices and collect them
+        invoices_created = []
         for i, contract in enumerate(active_contracts):
             invoice_date = date.today() - timedelta(days=i * 15)
             invoice = Invoice(
@@ -200,16 +202,23 @@ async def seed():
                 issued_date=invoice_date,
             )
             db.add(invoice)
+            invoices_created.append(invoice)
 
-            if i < 3:
-                payment = Payment(
-                    invoice_id=invoice.id,
-                    amount=invoice.amount,
-                    payment_date=invoice_date + timedelta(days=5),
-                    payment_method="bank_transfer",
-                    reference_number=f"PAY-{date.today().strftime('%Y%m')}-{i+1:04d}",
-                )
-                db.add(payment)
+        # Flush invoices to get IDs before creating payments
+        await db.flush()
+
+        # Create payments for first 3 invoices (marked as paid)
+        for i, invoice in enumerate(invoices_created):
+            if i >= 3:
+                break
+            payment = Payment(
+                invoice_id=invoice.id,
+                amount=invoice.amount,
+                payment_date=date.today() - timedelta(days=(i * 15) + 5),
+                payment_method="bank_transfer",
+                reference_number=f"PAY-{date.today().strftime('%Y%m')}-{i+1:04d}",
+            )
+            db.add(payment)
 
         await db.commit()
 
@@ -226,8 +235,8 @@ async def seed():
         print(f"  - Reserved: {sum(1 for u in all_units if u.status == UnitStatus.RESERVED)}")
         print(f"Tenants:  {len(tenants)}")
         print(f"\nLogin:   admin / admin123")
-        print(f"API:     http://localhost:8000/docs")
-        print(f"Frontend: http://localhost:3000")
+        print(f"API:     http://localhost:8201/docs")
+        print(f"Frontend: http://localhost:3201")
         print("=" * 50)
 
 

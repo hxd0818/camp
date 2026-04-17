@@ -3,7 +3,7 @@
 import enum
 from decimal import Decimal
 from datetime import datetime, date
-from sqlalchemy import String, Text, Numeric, DateTime, Date, Enum, ForeignKey, Integer, Boolean
+from sqlalchemy import String, Text, Numeric, DateTime, Date, Enum, JSON, ForeignKey, Integer, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
@@ -66,7 +66,7 @@ class Contract(Base):
     ai_imported: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_confidence_score: Mapped[float | None] = mapped_column(nullable=True)  # 0.0 - 1.0
     source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    raw_extracted_data: Mapped[dict | None] = mapped_column(nullable=True)
+    raw_extracted_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Documents
     contract_file_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

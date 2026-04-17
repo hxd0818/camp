@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.models.unit import Unit, Floor
+from app.models.unit import Unit
+from app.models.mall import Floor
 from app.models.tenant import Tenant
 from app.schemas.contract import ContractAIExtractedData
 

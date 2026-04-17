@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
-from app.models.unit import FloorPlan, Floor
+from app.models.unit import FloorPlan
+from app.models.mall import Floor
 from app.schemas.unit import FloorPlanCreate, FloorPlanResponse
 
 router = APIRouter()

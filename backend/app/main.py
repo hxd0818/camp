@@ -1,5 +1,7 @@
 """CAMP Backend - FastAPI application entry point."""
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,20 +9,41 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import init_db
 
+logger = logging.getLogger(__name__)
+
+settings = get_settings()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler - startup and shutdown events."""
-    # Startup
-    await init_db()
+    # Startup: initialize database with retry logic
+    max_retries = 10
+    retry_delay = 3
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            await init_db()
+            logger.info("Database initialized successfully")
+            break
+        except Exception as e:
+            if attempt == max_retries:
+                logger.error(f"Failed to initialize database after {max_retries} attempts: {e}")
+                raise
+            logger.warning(
+                f"Database not ready (attempt {attempt}/{max_retries}), "
+                f"retrying in {retry_delay}s... ({e})"
+            )
+            await asyncio.sleep(retry_delay)
+
     yield
+
     # Shutdown
     pass
 
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    settings = get_settings()
 
     app = FastAPI(
         title=settings.app_name,
