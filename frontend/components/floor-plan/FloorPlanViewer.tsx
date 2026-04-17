@@ -5,11 +5,12 @@
  *
  * Renders a floor plan image with interactive hotspot overlays.
  * Each hotspot represents a store unit and is clickable to show details.
+ * Hotspot positions are percentage-based to stay aligned when image scales.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { apiClient } from '@/lib/api';
-import type { HotspotItem, UnitWithContract } from '@/lib/types';
+import type { HotspotItem } from '@/lib/types';
 import { UnitDetailPanel } from './UnitDetailPanel';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8201';
@@ -90,27 +91,35 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
     );
   }
 
+  const imgW = renderData.image_width || 1200;
+  const imgH = renderData.image_height || 820;
+
   return (
     <div className="relative flex gap-4" style={{ height }}>
       {/* Floor Plan Area */}
       <div
         ref={containerRef}
-        className="floor-plan-container flex-1 border rounded-lg overflow-hidden bg-white"
+        className="floor-plan-container flex-1 border rounded-lg overflow-auto bg-white"
       >
-        <div className="floor-plan-image relative inline-block">
+        <div
+          className="floor-plan-image relative inline-block"
+          style={{ width: imgW, height: imgH }}
+        >
           {/* Background Image */}
           <img
             src={`${API_BASE}${renderData.image_url}`}
             alt="楼层平面图"
-            className="block max-w-full"
+            className="block w-full h-full"
             draggable={false}
           />
 
-          {/* Hotspot Overlays */}
+          {/* Hotspot Overlays - percentage-based positioning */}
           {renderData.hotspots.map((hotspot, index) => (
             <HotspotOverlay
               key={`hs-${hotspot.unit_id}-${index}`}
               hotspot={hotspot}
+              imgW={imgW}
+              imgH={imgH}
               color={getStatusColor(hotspot)}
               onClick={() => handleHotspotClick(hotspot)}
             />
@@ -134,28 +143,37 @@ export function FloorPlanViewer({ planId, mallId, height = '70vh' }: FloorPlanVi
 
 interface HotspotOverlayProps {
   hotspot: HotspotItem;
+  imgW: number;
+  imgH: number;
   color: string;
   onClick: () => void;
 }
 
-function HotspotOverlay({ hotspot, color, onClick }: HotspotOverlayProps) {
+function HotspotOverlay({ hotspot, imgW, imgH, color, onClick }: HotspotOverlayProps) {
   const { x, y, w, h, shape, unit_code, unit_name, tenant_name } = hotspot;
 
-  const baseStyle: React.CSSProperties = {
-    left: `${x}px`,
-    top: `${y}px`,
-    width: `${w}px`,
-    height: `${h}px`,
+  // Convert pixel coords to percentages so they scale with the image
+  const pctStyle: React.CSSProperties = {
+    left: `${(x / imgW) * 100}%`,
+    top: `${(y / imgH) * 100}%`,
+    width: `${(w / imgW) * 100}%`,
+    height: `${(h / imgH) * 100}%`,
     backgroundColor: `${color}33`,
     borderColor: color,
+    cursor: 'pointer',
   };
 
   if (shape === 'polygon' && hotspot.points) {
-    const pointsStr = hotspot.points.map(p => p.join(',')).join(' ');
+    // Convert polygon points to percentages
+    const pctPoints = hotspot.points.map(p => [
+      ((p[0] / imgW) * 100).toFixed(2),
+      ((p[1] / imgH) * 100).toFixed(2),
+    ]);
+    const pointsStr = pctPoints.map(p => p.join('%,')).join('% ');
     return (
       <svg
         className="absolute inset-0 pointer-events-none"
-        style={{ overflow: 'visible' }}
+        style={{ overflow: 'visible', width: '100%', height: '100%' }}
       >
         <polygon
           points={pointsStr}
@@ -173,18 +191,14 @@ function HotspotOverlay({ hotspot, color, onClick }: HotspotOverlayProps) {
 
   return (
     <div
-      className="group"
-      style={baseStyle}
+      className="absolute group hover:brightness-95 transition-all duration-150"
+      style={pctStyle}
       onClick={handleClick}
       title={`${unit_name || unit_code}${tenant_name ? ` - ${tenant_name}` : ''}`}
     >
-      {unit_code && (
-        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white opacity-80 select-none pointer-events-none whitespace-nowrap overflow-hidden">
-          {unit_code}
-        </span>
-      )}
+      {/* Hover highlight border */}
+      <div className="absolute inset-0 border-2 border-transparent group-hover:border-white/60 transition-colors pointer-events-none" />
     </div>
-  );
 
   function handleClick() { onClick(); }
 }
