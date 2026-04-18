@@ -1,5 +1,25 @@
 # CAMP Changelog
 
+## [2026-04-18] v0.1.7 - Polygon Drawing UX Fix & Contract Test Generator
+
+### Overview
+Fixed polygon drawing toolbar being unclickable (buttons inside pointer-events:none container). Added auto-close behavior when clicking near first vertex. Added sample contract PDF generator for AI import testing.
+
+### Key Highlights
+- **Toolbar fix**: polygon-toolbar now has pointer-events:auto, confirm/cancel buttons work
+- **Auto-close**: clicking within 20px of first vertex (with >=3 points) auto-closes and creates unit
+- **Contract generator**: gen_contract.py generates realistic commercial lease PDF for testing AI import
+- **Type fixes**: 5 TypeScript errors in api.ts cleaned up (Record<string,unknown>.detail type mismatch)
+
+### Fixed
+- `frontend/components/floor-plan/FloorPlanViewer.tsx` - Polygon toolbar unclickable, auto-close on first vertex click
+- `frontend/lib/api.ts` - 5 TypeScript type errors (error.detail type guard + FormData value coercion)
+
+### Added
+- **Contract Generator**: `gen_contract.py` - reportlab-based PDF generator for test contracts
+
+---
+
 ## [2026-04-18] v0.1.6 - Professional Floor Plan Base Maps
 
 ### Overview
