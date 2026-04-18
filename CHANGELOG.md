@@ -1,5 +1,17 @@
 # CAMP 变更日志
 
+## [2026-04-18] v0.1.10 - 合同与铺位解耦
+
+### 概述
+合同是永久留存的法律文件，不应随铺位删除而级联删除。调整架构：`contracts.unit_id` 改为可空，删除铺位时仅将关联合同的 `unit_id` 置 NULL。
+
+### 变更内容
+- `backend/app/models/contract.py` - `unit_id` 改为 `Mapped[int | None]`（nullable）
+- `backend/app/api/v1/units.py` - 删除铺位时合同保留并置空 unit_id，工单仍级联删除
+- 数据库：`ALTER TABLE contracts ALTER COLUMN unit_id DROP NOT NULL`
+
+---
+
 ## [2026-04-18] v0.1.9 - 删除铺位级联清理
 
 ### 概述
