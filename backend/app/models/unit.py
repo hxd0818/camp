@@ -55,6 +55,16 @@ class Unit(Base):
     # Additional info
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Leasing info for Kanban dashboard
+    vacancy_days: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=None,
+        comment="Vacancy days"
+    )
+    leasing_type: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default=None,
+        comment="Leasing type: new/renewal/adjustment"
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
