@@ -1,5 +1,27 @@
 # CAMP Changelog
 
+## [2026-04-18] v0.1.4 - Polygon Shape Support for Units
+
+### Overview
+Replaced rectangle-only unit drawing with arbitrary polygon support. Users can now create units of any shape (L-shape, trapezoid, irregular) by clicking vertices on the canvas.
+
+### Key Highlights
+- **Polygon drawing mode**: click to add vertices (min 3), right-click undo, rubber-band preview
+- **SVG polygon rendering**: HotspotOverlay uses SVG `<polygon>` for non-rectangular shapes
+- **Vertex drag editing**: drag individual vertices to reshape polygons in edit mode
+- **Backward compatible**: existing rect hotspots continue to work unchanged
+
+### Changed
+- `frontend/components/floor-plan/FloorPlanViewer.tsx` - Complete rewrite of add-unit flow (polygon vertices), HotspotOverlay (SVG polygon + vertex editing), save logic (persists shape+points)
+- `frontend/lib/types.ts` - Added `points?: number[][]` and typed `shape` field to HotspotItem
+
+### Fixed
+- JSX div tag mismatch: main container missing closing tag
+- New unit not persisting: now writes hotspot to floor_plan hotspots JSON column
+- Unterminated template literal typo (`NEW' instead of 'NEW')
+
+---
+
 ## [2026-04-18] v0.1.3 - Add Unit & Edit Mode Enhancements
 
 ### Overview
