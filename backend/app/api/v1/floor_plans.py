@@ -156,7 +156,9 @@ async def get_floor_plan_render_data(plan_id: int, db: AsyncSession = Depends(ge
                         contract = unit.current_contract
                         enriched["tenant_name"] = contract.tenant.name if contract.tenant else None
                         enriched["contract_status"] = contract.status.value
+                        enriched["lease_start"] = contract.lease_start.isoformat()
                         enriched["lease_end"] = contract.lease_end.isoformat()
+                        enriched["monthly_rent"] = float(contract.monthly_rent) if contract.monthly_rent else None
                         # Determine status color
                         enriched["status_color"] = _get_status_color(
                             unit.status.value, contract.status.value, contract.lease_end
