@@ -88,6 +88,8 @@ class ContractAIImportResponse(BaseModel):
     matched_unit_id: int | None = None
     matched_unit_code: str | None = None
     match_confidence: float | None = None
+    source_file_name: str | None = None
+    raw_data: str | None = None
     warnings: list[str] = []
 
 

@@ -119,7 +119,7 @@ export function UnitDetailPanel({ unit, onClose, mallId, onUpdated }: UnitDetail
     try {
       const ext = aiImportResult.extracted_data;
       await apiClient.confirmAiImport({
-        tenant_id: ext.tenant_id || 0,
+        tenant_name: ext.tenant_name || undefined,
         unit_id: unit.unit_id,
         contract_number: ext.contract_number || `${unit.unit_code}-${Date.now()}`,
         lease_start: editForm.lease_start || ext.lease_start,

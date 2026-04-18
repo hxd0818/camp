@@ -55,11 +55,40 @@ async def extract_contract_data(
     Returns:
         ContractAIExtractedData with parsed fields
     """
+    import io
+
     settings = get_settings()
 
-    # Build LLM request payload
-    # For PDF, we'd use a vision-capable model; for now we handle text extraction
-    # This can be extended with OCR + LLM pipeline
+    # Extract text from PDF before sending to LLM
+    document_text = ""
+    if content_type == "application/pdf":
+        try:
+            import pdfplumber
+            raw_bytes = base64.b64decode(file_content_b64)
+            with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        document_text += page_text + "\n"
+        except Exception:
+            pass  # Fall through to LLM without extracted text
+
+    # Build user content based on file type
+    if content_type.startswith("image"):
+        user_content = [
+            {
+                "type": "text",
+                "text": f"Extract lease information from this contract image: {file_name}",
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:{content_type};base64,{file_content_b64}"},
+            },
+        ]
+    else:
+        # For PDF (and other files), send extracted text to LLM
+        text_to_send = document_text or f"[Unable to extract text from {file_name}]"
+        user_content = f"Extract structured lease information from the following contract text:\n\n{text_to_send}"
 
     messages = [
         {
@@ -68,18 +97,7 @@ async def extract_contract_data(
         },
         {
             "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"Extract lease information from this contract file: {file_name}",
-                },
-                {
-                    "type": "image_url" if content_type.startswith("image") else "text",
-                    "image_url": {"url": f"data:{content_type};base64,{file_content_b64}"}
-                    if content_type.startswith("image")
-                    else f"Base64 encoded {content_type} content (length: {len(file_content_b64)})",
-                },
-            ],
+            "content": user_content,
         },
     ]
 
@@ -88,7 +106,7 @@ async def extract_contract_data(
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                f"{settings.llm_api_url}/v1/chat/completions",
+                f"{settings.llm_api_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {settings.llm_api_key}",
                     "Content-Type": "application/json",

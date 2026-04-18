@@ -121,12 +121,13 @@ async def ai_import_contract(
         matched_unit_id=matched_unit_id,
         matched_unit_code=matched_code,
         match_confidence=match_confidence,
+        source_file_name=file.filename,
+        raw_data=extracted.model_dump_json(),
     )
 
 
 @router.post("/import/ai/confirm", response_model=ContractResponse, status_code=201)
 async def confirm_ai_import(
-    tenant_id: int = Form(...),
     unit_id: int = Form(...),
     contract_number: str = Form(...),
     lease_start: str = Form(...),
@@ -136,14 +137,36 @@ async def confirm_ai_import(
     confidence_score: float | None = Form(None),
     source_file_name: str | None = Form(None),
     raw_data: str | None = Form(None),
+    tenant_name: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Confirm AI-imported contract and create the record."""
+    """Confirm AI-imported contract and create the record.
+
+    If tenant_name is provided, looks up existing tenant by name or creates one.
+    """
     from datetime import date as date_type
     import json
 
+    # Resolve or create tenant from extracted name
+    tenant_ref_id = None
+    if tenant_name:
+        result = await db.execute(
+            select(Tenant).where(Tenant.name == tenant_name.strip())
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            tenant_ref_id = existing.id
+        else:
+            new_tenant = Tenant(name=tenant_name.strip(), status="active")
+            db.add(new_tenant)
+            await db.flush()
+            tenant_ref_id = new_tenant.id
+
+    # Parse raw data for additional context
+    parsed_raw = json.loads(raw_data) if raw_data else None
+
     db_contract = Contract(
-        tenant_id_ref=tenant_id,
+        tenant_id_ref=tenant_ref_id,
         unit_id=unit_id,
         contract_number=contract_number,
         lease_start=date_type.fromisoformat(lease_start),
@@ -153,7 +176,7 @@ async def confirm_ai_import(
         ai_imported=True,
         ai_confidence_score=confidence_score,
         source_file_name=source_file_name,
-        raw_extracted_data=json.loads(raw_data) if raw_data else None,
+        raw_extracted_data=parsed_raw,
         status="draft",
     )
     db.add(db_contract)
