@@ -167,7 +167,8 @@ async def get_floor_plan_render_data(plan_id: int, db: AsyncSession = Depends(ge
                         enriched["tenant_name"] = None
                         enriched["status_color"] = _get_status_color(unit.status.value, None, None)
 
-            enriched_hotspots.append(enriched)
+                    enriched_hotspots.append(enriched)
+                # Skip orphaned hotspots (unit_id references a deleted unit)
 
     return {
         "id": plan.id,
