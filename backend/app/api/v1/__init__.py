@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import malls, units, tenants, contracts, floor_plans, finance, operations, auth, plans, news
+from app.api.v1 import malls, units, tenants, contracts, floor_plans, finance, operations, auth, plans, news, dashboard
 
 router = APIRouter()
 
@@ -16,3 +16,4 @@ router.include_router(operations.router, prefix="/operations", tags=["Operations
 router.include_router(auth.router, prefix="/auth", tags=["Auth"])
 router.include_router(plans.router, prefix="/plans", tags=["Plans"])
 router.include_router(news.router, prefix="/news", tags=["News"])
+router.include_router(dashboard.router)  # prefix and tags defined in dashboard.py itself
