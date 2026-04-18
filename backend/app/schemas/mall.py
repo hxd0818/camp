@@ -47,7 +47,7 @@ class BuildingBase(BaseModel):
 
 
 class BuildingCreate(BuildingBase):
-    mall_id: int
+    mall_id: int | None = None  # Optional; taken from URL path when creating under a mall
 
 
 class BuildingUpdate(BaseModel):

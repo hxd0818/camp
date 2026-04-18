@@ -92,7 +92,9 @@ async def create_building(
     if not mall_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Mall not found")
 
-    db_building = Building(mall_id=mall_id, **building.model_dump(exclude={"mall_id"}))
+    # Use mall_id from URL path, ignore any mall_id in request body
+    data = building.model_dump(exclude={"mall_id"}, exclude_unset=True)
+    db_building = Building(mall_id=mall_id, **data)
     db.add(db_building)
     await db.flush()
     await db.refresh(db_building)
