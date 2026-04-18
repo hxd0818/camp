@@ -129,21 +129,25 @@ async def update_unit_hotspot(
 
 @router.delete("/{unit_id}", status_code=204)
 async def delete_unit(unit_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a unit and its dependent records (contracts, work orders, hotspots)."""
+    """Delete a unit. Contracts are preserved with unit_id set to NULL."""
     result = await db.execute(select(Unit).where(Unit.id == unit_id))
     unit = result.scalar_one_or_none()
     if not unit:
         raise HTTPException(status_code=404, detail="Unit not found")
 
-    # Delete dependent records first (FK constraints)
-    from sqlalchemy import delete as sql_delete
+    # Preserve contracts: set unit_id to NULL instead of deleting
     from app.models.contract import Contract
-    from app.models.operations import WorkOrder
 
-    # Delete work orders referencing this unit
+    contracts_result = await db.execute(
+        select(Contract).where(Contract.unit_id == unit_id)
+    )
+    for contract in contracts_result.scalars().all():
+        contract.unit_id = None
+
+    # Delete work orders (operational records, safe to remove)
+    from sqlalchemy import delete as sql_delete
+    from app.models.operations import WorkOrder
     await db.execute(sql_delete(WorkOrder).where(WorkOrder.unit_id == unit_id))
-    # Delete contracts referencing this unit
-    await db.execute(sql_delete(Contract).where(Contract.unit_id == unit_id))
 
     await db.delete(unit)
 

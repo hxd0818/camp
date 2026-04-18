@@ -39,7 +39,7 @@ class Contract(Base):
     tenant_id_ref: Mapped[int] = mapped_column(
         ForeignKey("tenants.id"), nullable=False, name="tenant_ref_id"
     )
-    unit_id: Mapped[int] = mapped_column(ForeignKey("units.id"), nullable=False)
+    unit_id: Mapped[int | None] = mapped_column(ForeignKey("units.id"), nullable=True)
 
     # Contract details
     contract_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
