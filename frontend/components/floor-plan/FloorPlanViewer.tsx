@@ -167,7 +167,7 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
     setSaving(true);
     try {
       for (const hs of renderData.hotspots) {
-        const hotspotData: Record<string, unknown> = {
+        const hotspotData: { x: number; y: number; width: number; height: number; shape?: string; points?: number[][] } = {
           x: hs.x,
           y: hs.y,
           width: hs.w,
@@ -327,9 +327,20 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
     const rect = containerRef.current.getBoundingClientRect();
     const imgX = (e.clientX - rect.left - pan.x) / scale;
     const imgY = (e.clientY - rect.top - pan.y) / scale;
+    const clickPt = { x: Math.round(imgX), y: Math.round(imgY) };
 
-    setPolygonPoints(prev => [...prev, { x: Math.round(imgX), y: Math.round(imgY) }]);
-  }, [addingUnit, pan, scale]);
+    // If >= 3 points placed and clicking near first vertex -> auto-close & confirm
+    if (polygonPoints.length >= 3) {
+      const first = polygonPoints[0];
+      const dist = Math.sqrt((clickPt.x - first.x) ** 2 + (clickPt.y - first.y) ** 2);
+      if (dist < 20) {
+        confirmAddUnit();
+        return;
+      }
+    }
+
+    setPolygonPoints(prev => [...prev, clickPt]);
+  }, [addingUnit, pan, scale, polygonPoints, confirmAddUnit]);
 
   // Track mouse position for rubber-band line during polygon drawing
   const handleMouseMoveForPoly = useCallback((e: React.MouseEvent) => {
@@ -487,7 +498,7 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
 
           {/* Polygon toolbar / confirm bar */}
           {addingUnit && (
-            <div className="polygon-toolbar absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-2 bg-white rounded-lg shadow-lg border px-4 py-2">
+            <div className="polygon-toolbar absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-2 bg-white rounded-lg shadow-lg border px-4 py-2" style={{ pointerEvents: 'auto' }}>
               {polygonPoints.length < 3 ? (
                 <>
                   <span className="text-sm text-gray-500">
@@ -505,7 +516,7 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
               ) : (
                 <>
                   <span className="text-sm text-gray-600">
-                    {polygonPoints.length} 个顶点 - 右键撤销 | 靠近起点点击闭合
+                    {polygonPoints.length} 个顶点 - 点击起点闭合 / 点按钮确认
                   </span>
                   <button onClick={undoLastPoint}
                     className="px-2 py-1 text-xs rounded border bg-white text-gray-600 hover:bg-gray-50">
