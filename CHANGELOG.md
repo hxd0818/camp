@@ -1,5 +1,16 @@
 # CAMP 变更日志
 
+## [2026-04-19] v0.1.11 - 修复孤立热点与删除报错
+
+### 概述
+修复删除铺位后出现 "Unit not found" 错误的问题。根因是 floor_plans.hotspots JSON 中残留已删除铺位的引用，render-data 接口仍将其返回给前端，导致操作"幽灵铺位"时 404。
+
+### 修复内容
+- `backend/app/api/v1/floor_plans.py` - render-data 接口跳过 unit_id 不存在的孤立 hotspot
+- 清理数据库中 2 条孤立热点记录（unit_id=4, unit_id=18）
+
+---
+
 ## [2026-04-18] v0.1.10 - 合同与铺位解耦
 
 ### 概述
