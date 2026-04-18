@@ -16,6 +16,7 @@ Added ability to create new units by clicking on the floor plan canvas in edit m
 
 ### Fixed
 - JSX div tag mismatch: main container missing closing `</div>` causing "Unexpected token div" error
+- New unit not appearing after creation: createUnit() only wrote to units table but did not add hotspot to floor_plan hotspots JSON column. Now also calls updateHotspots() to persist position.
 
 ---
 
