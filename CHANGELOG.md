@@ -1,5 +1,25 @@
 # CAMP Changelog
 
+## [2026-04-18] v0.1.6 - Professional Floor Plan Base Maps
+
+### Overview
+Replaced placeholder floor plan images with professional SVG shopping mall layouts featuring realistic store arrangements, central atrium, corridors, and public facilities.
+
+### Key Highlights
+- **Level 1**: 14 retail units around central atrium, main entrance, 4-car elevator bank, WC, escalator
+- **Level 2**: 14 units + food court (12 stalls), dual-direction escalators, atrium overlook (void)
+- **Level 3**: 12 boutique units + cinema anchor (6 screens, 850 m²), top-floor layout
+- **SVG vector format**: Crisp at any zoom level, editable, small file size
+- **Professional annotations**: Unit codes, area labels, legend, north arrow, info box
+
+### Changed
+- `assets/floor-plans/floor_1_plan.svg` - L1 floor plan with 14 units
+- `assets/floor-plans/floor_2_plan.svg` - L2 floor plan with food court
+- `assets/floor-plans/floor_3_plan.svg` - L3 floor plan with cinema anchor
+- Database: Updated active floor_plan records to reference new .svg images
+
+---
+
 ## [2026-04-18] v0.1.5 - Extended Unit Edit & AI Contract Import
 
 ### Overview
