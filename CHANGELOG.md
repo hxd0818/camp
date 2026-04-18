@@ -1,5 +1,17 @@
 # CAMP 变更日志
 
+## [2026-04-19] v0.1.13 - 楼宇新增功能
+
+### 概述
+购物中心详情页的「新增楼宇」按钮原为静态无响应状态，现补全创建流程。同时修复了后端 `mall_id` 字段必填导致前端无法直接调用的问题。
+
+### 变更内容
+- `frontend/app/malls/[mallId]/page.tsx` - 新增弹窗表单（名称、编码、楼层数、备注），提交后自动刷新列表
+- `backend/app/api/v1/malls.py` - 创建楼宇时从 URL 路径取 mall_id，不再要求请求体包含
+- `backend/app/schemas/mall.py` - BuildingCreate.mall_id 改为可选
+
+---
+
 ## [2026-04-19] v0.1.12 - 购物中心新增功能
 
 ### 概述
