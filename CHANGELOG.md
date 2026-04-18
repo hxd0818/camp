@@ -1,5 +1,33 @@
 # CAMP 变更日志
 
+## [2026-04-18] v0.1.8 - 合同 AI 导入完整链路修复
+
+### 概述
+修复合同上传 AI 导入功能无法正常工作的 3 个关键问题，使完整的「上传 PDF → LLM 提取 → 预览 → 确认导入」流程端到端可用。
+
+### 问题根因（3个）
+1. **外键约束错误**：前端传 `tenant_id=0`（AI 提取结果无此字段），后端拿 0 查 tenants 表外键 → 不存在 → 422/500 报错
+2. **PDF 内容未传给 LLM**：对 PDF 文件只发送了 `"Base64 content length: xxx"` 文字描述，LLM 根本看不到合同内容
+3. **LLM API URL 双重 /v1**：`settings.llm_api_url` 已含 `/v1`，代码又拼接 `/v1/chat/completions`，导致请求 404
+
+### 修复内容
+- `backend/app/api/v1/contracts.py` - 确认接口改为接收 `tenant_name`，自动查找或创建租户记录
+- `backend/app/services/contract_ai.py` - 新增 pdfplumber PDF 文本提取；修正 LLM API URL
+- `backend/app/schemas/contract.py` - 响应新增 `source_file_name`、`raw_data` 字段
+- `frontend/components/floor-plan/UnitDetailPanel.tsx` - 确认导入改发 `tenant_name`
+- `frontend/lib/api.ts` - 更新接口签名（tenant_id → tenant_name）
+- `backend/requirements.txt` - 新增 pdfplumber 依赖
+
+### 配置说明
+需在 `.env` 中配置 LLM 服务：
+```
+LLM_API_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_API_KEY=your-api-key
+LLM_MODEL=qwen3.6-flash
+```
+
+---
+
 ## [2026-04-18] v0.1.7 - 多边形绘制工具栏修复 & 合同测试生成器
 
 ### 概述
