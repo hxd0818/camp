@@ -2,7 +2,7 @@
 
 import enum
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, Enum
+from sqlalchemy import String, Text, DateTime, Enum, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
@@ -18,6 +18,15 @@ class TenantStatus(str, enum.Enum):
     INACTIVE = "inactive"
     PROSPECT = "prospect"
     BLACKLISTED = "blacklisted"
+
+
+class BrandTier(str, enum.Enum):
+    S = "s"
+    A = "a"
+    B = "b"
+    C = "c"
+    LIANFA = "lianfa"
+    UNKNOWN = "unknown"
 
 
 class Tenant(Base):
@@ -42,6 +51,20 @@ class Tenant(Base):
 
     status: Mapped[TenantStatus] = mapped_column(Enum(TenantStatus), default=TenantStatus.PROSPECT)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Brand classification
+    brand_tier: Mapped[BrandTier | None] = mapped_column(
+        Enum(BrandTier), nullable=True, default=None,
+        comment="Brand tier: S/A/B/C/lianfa"
+    )
+    is_flagship: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, default=False,
+        comment="Is flagship store"
+    )
+    is_first_entry: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, default=False,
+        comment="Is first entry brand"
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
