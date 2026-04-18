@@ -1,5 +1,21 @@
 # CAMP Changelog
 
+## [2026-04-18] v0.1.5 - Extended Unit Edit & AI Contract Import
+
+### Overview
+Extended unit detail panel with comprehensive edit fields and AI-powered contract upload with automatic data extraction.
+
+### Key Highlights
+- **Extended edit form**: monthly_rent, layout_type, lease_start, lease_end, description fields
+- **AI contract upload**: Upload PDF/image contracts, LLM auto-extracts tenant/rent/date info
+- **Import preview**: Shows confidence score, warnings, source filename before confirmation
+- **Auto pre-fill**: Extracted data automatically populates the edit form for review
+
+### Changed
+- `frontend/components/floor-plan/UnitDetailPanel.tsx` - Full rewrite: extended form fields, AI import workflow, confirm/cancel flow, enhanced read-only view
+
+---
+
 ## [2026-04-18] v0.1.4 - Polygon Shape Support for Units
 
 ### Overview
