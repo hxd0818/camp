@@ -201,6 +201,30 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
     }
   }, [renderData, planId]);
 
+  // --- Delete unit ---
+  const handleDeleteUnit = useCallback(async (unitId: number) => {
+    if (!confirm('确定要删除这个铺位吗？此操作不可撤销。')) return;
+    try {
+      await apiClient.deleteUnit(unitId);
+      // Remove from local state and floor plan hotspots
+      setRenderData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          hotspots: prev.hotspots.filter(hs => hs.unit_id !== unitId),
+        };
+      });
+      // Also remove from floor plan hotspots on server
+      if (renderData) {
+        const remaining = renderData.hotspots.filter(hs => hs.unit_id !== unitId);
+        await apiClient.updateHotspots(planId, remaining);
+      }
+      setSelectedUnit(null);
+    } catch (err) {
+      alert('删除失败: ' + (err instanceof Error ? err.message : '未知错误'));
+    }
+  }, [planId, renderData]);
+
   // --- Add unit handlers (polygon vertex drawing) ---
   const startAddingUnit = useCallback(() => {
     setAddingUnit(true);
@@ -362,8 +386,8 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
         onMouseLeave={handleMouseUp}
         onContextMenu={(e) => { if (addingUnit) { e.preventDefault(); undoLastPoint(); } }}
       >
-        {/* Toolbar */}
-        <div className="absolute top-3 right-3 z-10 flex flex-col gap-1">
+        {/* Toolbar - must be above transformed content */}
+        <div className="absolute top-3 right-3 z-20 flex flex-col gap-1" style={{ pointerEvents: 'auto' }}>
           <button onClick={handleZoomIn} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold" title="放大">+</button>
           <button onClick={handleZoomOut} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-sm font-bold" title="缩小">-</button>
           <button onClick={handleZoomReset} className="w-8 h-8 flex items-center justify-center bg-white rounded-md shadow-sm border text-gray-600 hover:bg-gray-50 text-xs" title="适应窗口">Fit</button>
@@ -411,8 +435,8 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
           </div>
         )}
 
-        {/* Transformed content */}
-        <div className="absolute origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, width: imgW, height: imgH }}>
+        {/* Transformed content - pointer-events-none so toolbar clicks work */}
+        <div className="absolute origin-top-left" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, width: imgW, height: imgH, pointerEvents: 'none' }}>
           <img src={`${API_BASE}${renderData.image_url}`} alt="楼层平面图" className="block pointer-events-none" draggable={false} style={{ width: imgW, height: imgH }} />
 
           {renderData.hotspots.map((hs, i) => (
@@ -422,7 +446,8 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
               color={getStatusColor(hs)}
               editMode={editMode}
               onClick={() => handleHotspotClick(hs)}
-              onUpdate={(x, y, w, h) => handleHotspotUpdate(hs.unit_id, x, y, w, h)}
+              onUpdate={(x, y, w, h, pts) => handleHotspotUpdate(hs.unit_id, x, y, w, h, pts)}
+              onDelete={() => handleDeleteUnit(hs.unit_id)}
             />
           ))}
 
@@ -528,6 +553,7 @@ interface HotspotOverlayProps {
   editMode: boolean;
   onClick: () => void;
   onUpdate: (x: number, y: number, w: number, h: number, points?: number[][]) => void;
+  onDelete: () => void;
 }
 
 /** Compute centroid of a polygon for label placement */
@@ -537,7 +563,7 @@ function getCentroid(points: number[][]): { cx: number; cy: number } {
   return { cx: cx / points.length, cy: cy / points.length };
 }
 
-function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate }: HotspotOverlayProps) {
+function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate, onDelete }: HotspotOverlayProps) {
   const { x, y, w, h, unit_code, unit_name, shape, points } = hotspot;
   const isPolygon = shape === 'polygon' && points && points.length >= 3;
 
@@ -692,6 +718,24 @@ function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate }: Hotspot
             className="select-none pointer-events-none text-[10px] font-medium" fill="#374151">
             {unit_name || unit_code}
           </text>
+          {/* Delete button at top-right of bounding box */}
+          {(() => {
+            const xs = pts.map(p => p[0]);
+            const ys = pts.map(p => p[1]);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            return (
+              <foreignObject x={maxX - 18} y={minY - 22} width="20" height="20" style={{ pointerEvents: 'all' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  className="w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold hover:bg-red-600 shadow-sm border-0"
+                  title="删除铺位"
+                >
+                  x
+                </button>
+              </foreignObject>
+            );
+          })()}
         </svg>
       );
     }
@@ -727,6 +771,7 @@ function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate }: Hotspot
           backgroundColor: `${color}22`,
           border: `2px dashed ${color}`,
           cursor: rectDragging ? 'grabbing' : 'move',
+          pointerEvents: 'auto',
         }}
         onMouseDown={(e) => startRectDrag('move', e)}
       >
@@ -741,6 +786,14 @@ function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate }: Hotspot
         <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium select-none pointer-events-none text-gray-700">
           {unit_name || unit_code}
         </span>
+        {/* Delete button */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold hover:bg-red-600 shadow-sm border-0 z-20"
+          title="删除铺位"
+        >
+          x
+        </button>
       </div>
     );
   }
@@ -757,6 +810,7 @@ function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate }: Hotspot
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        pointerEvents: 'auto',
       }}
       onClick={handleClick}
       title={`${unit_name || unit_code}${hotspot.tenant_name ? ` - ${hotspot.tenant_name}` : ''}`}
