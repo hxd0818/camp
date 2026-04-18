@@ -1,5 +1,17 @@
 # CAMP 变更日志
 
+## [2026-04-19] v0.1.14 - 驾驶舱前端基础设施
+
+### 概述
+为招商驾驶舱（Kanban Dashboard）搭建前端基础设施：安装拖拽库、创建 Dashboard API 客户端、定义 TypeScript 类型。
+
+### 变更内容
+- 安装 `@hello-pangea/dnd` 拖拽库（Kanban 看板拖拽交互依赖）
+- 新增 `frontend/lib/dashboard-api.ts` - 驾驶舱专用 API 客户端（KPI统计、看板数据、铺位移动、空置分析、租赁期分布、品牌能级、到期合同、招商计划CRUD、市场资讯CRUD）
+- 扩展 `frontend/lib/types.ts` - 新增 Dashboard 类型（KPIMetric、DashboardKPIs、DashboardStats、KanbanCard、KanbanColumn、KanbanData、LeasingPlan、MarketNews）
+
+---
+
 ## [2026-04-19] v0.1.13 - 楼宇新增功能
 
 ### 概述
