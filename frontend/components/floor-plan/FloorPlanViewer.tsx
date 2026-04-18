@@ -318,12 +318,16 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
 
   // Override mouse down for add mode (add vertex instead of starting pan)
   const handleMouseDownWrapper = useCallback((e: React.MouseEvent) => {
+    // Don't start pan if clicking on UI controls (toolbar, hotspots, etc.)
+    const target = e.target as HTMLElement;
+    if (target.closest('.hotspot-edit') ||
+        target.closest('button') ||
+        target.closest('.polygon-toolbar')) return;
+
     if (addingUnit) {
       // In polygon mode, click adds a vertex (handled by onClick)
-      // Don't start pan drag
       return;
     }
-    if ((e.target as HTMLElement).closest('.hotspot-edit')) return;
     if (e.button !== 0) return;
     setIsDragging(true);
     dragStart.current = { x: e.clientX, y: e.clientY };
