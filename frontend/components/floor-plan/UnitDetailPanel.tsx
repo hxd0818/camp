@@ -176,16 +176,22 @@ export function UnitDetailPanel({ unit, onClose, onUpdated }: UnitDetailPanelPro
               <p className="text-sm text-gray-500">{unit.unit_code}</p>
             </section>
 
-            {/* Status */}
+            {/* Status & Area */}
             <section className="bg-gray-50 rounded-lg p-3 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">状态</span>
                 <span className="font-medium">{statusLabel[unit.unit_status] || unit.unit_status}</span>
               </div>
-              {unit.area && (
+              {unit.area != null && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">面积</span>
-                  <span className="font-medium">{unit.area} 平方米</span>
+                  <span className="font-medium">{unit.area} m²</span>
+                </div>
+              )}
+              {unit.monthly_rent != null && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">月租金</span>
+                  <span className="font-medium text-camp-600">¥{unit.monthly_rent.toLocaleString()}</span>
                 </div>
               )}
             </section>
@@ -203,30 +209,40 @@ export function UnitDetailPanel({ unit, onClose, onUpdated }: UnitDetailPanelPro
             )}
 
             {/* Contract Info */}
-            {unit.contract_status && (
+            {(unit.contract_status || unit.lease_start) && (
               <section>
                 <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
                   合同信息
                 </h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">合同状态</span>
-                    <span
-                      className={`font-medium ${
-                        unit.contract_status === 'active'
-                          ? 'text-green-600'
-                          : unit.contract_status === 'expiring'
-                          ? 'text-amber-600'
-                          : 'text-gray-600'
-                      }`}
-                    >
-                      {contractStatusLabel[unit.contract_status] || unit.contract_status}
-                    </span>
-                  </div>
+                  {unit.contract_status && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">合同状态</span>
+                      <span
+                        className={`font-medium ${
+                          unit.contract_status === 'active'
+                            ? 'text-green-600'
+                            : unit.contract_status === 'expiring'
+                            ? 'text-amber-600'
+                            : 'text-gray-600'
+                        }`}
+                      >
+                        {contractStatusLabel[unit.contract_status] || unit.contract_status}
+                      </span>
+                    </div>
+                  )}
+                  {unit.lease_start && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">起租时间</span>
+                      <span className="font-medium">{formatDate(unit.lease_start)}</span>
+                    </div>
+                  )}
                   {unit.lease_end && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">租期截止</span>
-                      <span className="font-medium">{formatDate(unit.lease_end)}</span>
+                      <span className="text-gray-500">到期时间</span>
+                      <span className={`font-medium ${new Date(unit.lease_end) < new Date() ? 'text-red-500' : ''}`}>
+                        {formatDate(unit.lease_end)}
+                      </span>
                     </div>
                   )}
                 </div>

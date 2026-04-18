@@ -579,19 +579,8 @@ function getCentroid(points: number[][]): { cx: number; cy: number } {
 }
 
 function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate, onDelete }: HotspotOverlayProps) {
-  const { x, y, w, h, unit_code, unit_name, shape, points,
-          area, monthly_rent, lease_start, lease_end } = hotspot;
+  const { x, y, w, h, unit_code, unit_name, shape, points } = hotspot;
   const isPolygon = shape === 'polygon' && points && points.length >= 3;
-
-  // Hover info card state
-  const [hovered, setHovered] = useState(false);
-
-  /** Format date string to short Chinese format */
-  const fmtDate = (ds: string | undefined) => {
-    if (!ds) return '';
-    try { return new Date(ds).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }); }
-    catch { return ds; }
-  };
 
   // --- Rect mode state ---
   const [rectDragging, setRectDragging] = useState<'move' | string | null>(null);
@@ -768,46 +757,22 @@ function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate, onDelete 
 
     // View mode: clickable polygon
     return (
-      <div
-        className="absolute group"
-        style={{ left: 0, top: 0, width: '100%', height: '100%' }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
-        <svg style={{ overflow: 'visible' }}>
-          <title>{`${unit_name || unit_code}${hotspot.tenant_name ? ` - ${hotspot.tenant_name}` : ''}`}</title>
-          <polygon
-            points={ptsStr}
-            fill={`${color}30`}
-            stroke={color}
-            strokeWidth="2"
-            className="hover:brightness-95 transition-all duration-150 cursor-pointer"
-            style={{ pointerEvents: 'all' }}
-            onClick={handleClick}
-          />
-          <text x={centroid.cx} y={centroid.cy} textAnchor="middle" dominantBaseline="central"
-            className="select-none pointer-events-none text-[11px] font-medium" fill="#1e293b">
-            {(unit_name && unit_name !== unit_code) ? unit_name : unit_code}
-          </text>
-        </svg>
-        {/* Hover info card */}
-        {hovered && (
-          <div
-            className="absolute z-30 bg-white/95 backdrop-blur-sm rounded-lg shadow-xl border px-3 py-2 text-xs space-y-0.5 min-w-[140px]"
-            style={{
-              left: Math.min(centroid.cx + 15, (w || 400) - 150),
-              top: Math.max(centroid.cy - 40, 5),
-              pointerEvents: 'none',
-            }}
-          >
-            <div className="font-semibold text-gray-800">{unit_name || unit_code}</div>
-            {area != null && <div className="text-gray-500">面积: <span className="text-gray-700 font-medium">{area} m²</span></div>}
-            {monthly_rent != null && <div className="text-gray-500">月租: <span className="text-camp-600 font-medium">¥{monthly_rent.toLocaleString()}</span></div>}
-            {lease_start && <div className="text-gray-500">起租: <span className="text-gray-700">{fmtDate(lease_start)}</span></div>}
-            {lease_end && <div className="text-gray-500">到期: <span className={(new Date(lease_end) < new Date()) ? 'text-red-500' : 'text-gray-700'}>{fmtDate(lease_end)}</span></div>}
-          </div>
-        )}
-      </div>
+      <svg className="absolute" style={{ left: 0, top: 0, width: '100%', height: '100%', overflow: 'visible' }}>
+        <title>{`${unit_name || unit_code}${hotspot.tenant_name ? ` - ${hotspot.tenant_name}` : ''}`}</title>
+        <polygon
+          points={ptsStr}
+          fill={`${color}30`}
+          stroke={color}
+          strokeWidth="2"
+          className="hover:brightness-95 transition-all duration-150 cursor-pointer"
+          style={{ pointerEvents: 'all' }}
+          onClick={handleClick}
+        />
+        <text x={centroid.cx} y={centroid.cy} textAnchor="middle" dominantBaseline="central"
+          className="select-none pointer-events-none text-[11px] font-medium" fill="#1e293b">
+          {(unit_name && unit_name !== unit_code) ? unit_name : unit_code}
+        </text>
+      </svg>
     );
   }
 
@@ -851,49 +816,27 @@ function HotspotOverlay({ hotspot, color, editMode, onClick, onUpdate, onDelete 
   const label = unit_name && unit_name !== unit_code ? unit_name : unit_code;
   return (
     <div
-      className="relative group hover:brightness-95 transition-all duration-150"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className="absolute group hover:brightness-95 transition-all duration-150"
+      style={{
+        left: x, top: y, width: w, height: h,
+        backgroundColor: `${color}30`,
+        border: `2px solid ${color}`,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        pointerEvents: 'auto',
+      }}
+      onClick={handleClick}
+      title={`${unit_name || unit_code}${hotspot.tenant_name ? ` - ${hotspot.tenant_name}` : ''}`}
     >
-      <div
-        style={{
-          left: x, top: y, width: w, height: h,
-          backgroundColor: `${color}30`,
-          border: `2px solid ${color}`,
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'auto',
-        }}
-        onClick={handleClick}
-        title={`${unit_name || unit_code}${hotspot.tenant_name ? ` - ${hotspot.tenant_name}` : ''}`}
-      >
-        <span className="text-[11px] font-medium select-none pointer-events-none text-center leading-tight px-1"
-              style={{ color: '#1e293b', maxWidth: w - 8 }}>
-          {label}
-          {unit_name && unit_name !== unit_code && (
-            <span className="block text-[9px] text-gray-500 mt-0.5">{unit_code}</span>
-          )}
-        </span>
-      </div>
-      {/* Hover info card */}
-      {hovered && (
-        <div
-          className="absolute z-30 bg-white/95 backdrop-blur-sm rounded-lg shadow-xl border px-3 py-2 text-xs space-y-0.5 min-w-[140px]"
-          style={{
-            left: Math.min(w + 5, (w || 400) - 145),
-            top: -5,
-            pointerEvents: 'none',
-          }}
-        >
-          <div className="font-semibold text-gray-800">{unit_name || unit_code}</div>
-          {area != null && <div className="text-gray-500">面积: <span className="text-gray-700 font-medium">{area} m²</span></div>}
-          {monthly_rent != null && <div className="text-gray-500">月租: <span className="text-camp-600 font-medium">¥{monthly_rent.toLocaleString()}</span></div>}
-          {lease_start && <div className="text-gray-500">起租: <span className="text-gray-700">{fmtDate(lease_start)}</span></div>}
-          {lease_end && <div className="text-gray-500">到期: <span className={(new Date(lease_end) < new Date()) ? 'text-red-500' : 'text-gray-700'}>{fmtDate(lease_end)}</span></div>}
-        </div>
-      )}
+      <span className="text-[11px] font-medium select-none pointer-events-none text-center leading-tight px-1"
+            style={{ color: '#1e293b', maxWidth: w - 8 }}>
+        {label}
+        {unit_name && unit_name !== unit_code && (
+          <span className="block text-[9px] text-gray-500 mt-0.5">{unit_code}</span>
+        )}
+      </span>
     </div>
   );
 }
