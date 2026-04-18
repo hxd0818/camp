@@ -308,3 +308,36 @@ export interface MarketNews {
   created_at: string;
   updated_at: string | null;
 }
+
+// --- Dashboard Chart / Table Types ---
+
+export interface VacancyBucketSchema {
+  name: string;
+  value: number;
+  count: number;
+  color: string;
+}
+
+export interface LeaseTermBucketSchema {
+  term: string;
+  count: number;
+  area: number;
+}
+
+export interface BrandTierBucketSchema {
+  name: string;
+  value: number;
+  color: string;
+  percentage: number;
+}
+
+export interface ExpiringContractItem {
+  contract_id: number;
+  contract_number: string;
+  unit_code: string;
+  tenant_name: string | null;
+  lease_end: string;
+  days_remaining: number;
+  monthly_rent: number | null;
+  status: string;
+}
