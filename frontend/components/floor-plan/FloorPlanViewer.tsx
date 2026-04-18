@@ -538,7 +538,22 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
 
       {/* Detail Panel */}
       {selectedUnit && !editMode && (
-        <UnitDetailPanel unit={selectedUnit} onClose={handleClosePanel} mallId={mallId} />
+        <UnitDetailPanel
+          unit={selectedUnit}
+          onClose={handleClosePanel}
+          mallId={mallId}
+          onUpdated={() => {
+            // Refresh render data after unit edit to get updated info
+            apiClient.getFloorPlanRenderData(planId).then(data => {
+              setRenderData(prev => prev ? {
+                ...data,
+                hotspots: data.hotspots || [],
+                image_width: data.image_width || prev.image_width,
+                image_height: data.image_height || prev.image_height,
+              } : null);
+            });
+          }}
+        />
       )}
       </div>
     </div>
