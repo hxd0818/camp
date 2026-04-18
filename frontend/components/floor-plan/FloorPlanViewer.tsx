@@ -196,8 +196,9 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
   }, []);
 
   const confirmAddUnit = useCallback(async () => {
-    if (!newUnit || !floorId) return;
+    if (!newUnit || !floorId || !renderData) return;
     try {
+      // Step 1: Create the Unit record
       const unit = await apiClient.createUnit({
         floor_id: floorId,
         code: `NEW-${Date.now().toString(36).slice(-4).toUpperCase()}`,
@@ -207,7 +208,21 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
         gross_area: Math.round((newUnit.w * newUnit.h) / 100),
         hotspot_data: { x: newUnit.x, y: newUnit.y, width: newUnit.w, height: newUnit.h, shape: 'rect' },
       });
-      // Refresh to get the new unit with proper ID
+
+      // Step 2: Add hotspot entry to the active floor plan's hotspots array
+      const newHotspot = {
+        unit_id: unit.id,
+        unit_code: unit.code || `NEW`,
+        x: Math.round(newUnit.x),
+        y: Math.round(newUnit.y),
+        w: Math.round(newUnit.w),
+        h: Math.round(newUnit.h),
+        shape: 'rect',
+      };
+      const updatedHotspots = [...renderData.hotspots, newHotspot];
+      await apiClient.updateHotspots(planId, updatedHotspots);
+
+      // Step 3: Refresh render data to get enriched hotspot (with color etc.)
       const data = await apiClient.getFloorPlanRenderData(planId);
       setRenderData(prev => prev ? {
         ...data,
@@ -215,13 +230,13 @@ export function FloorPlanViewer({ planId, mallId, floorId, height = '70vh', edit
         image_width: data.image_width || prev.image_width,
         image_height: data.image_height || prev.image_height,
       } : null);
-      setHotspotsDirty(true);
+
       setAddingUnit(false);
       setNewUnit(null);
     } catch (err) {
       alert('创建铺位失败: ' + (err instanceof Error ? err.message : '未知错误'));
     }
-  }, [newUnit, floorId, planId]);
+  }, [newUnit, floorId, planId, renderData]);
 
   // Canvas click handler for adding unit (intercepts before pan)
   const handleCanvasClickForAdd = useCallback((e: React.MouseEvent) => {
