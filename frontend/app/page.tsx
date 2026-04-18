@@ -16,6 +16,9 @@ export default function HomePage() {
             <span className="text-sm text-gray-400">商业资产管理平台</span>
           </div>
           <nav className="flex gap-6 text-sm text-gray-600">
+            <Link href="/dashboard" className="hover:text-camp-600 transition-colors font-medium text-camp-700">
+              招商驾驶舱
+            </Link>
             <Link href="/malls" className="hover:text-camp-600 transition-colors">
               购物中心
             </Link>
@@ -60,6 +63,12 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 py-12">
           <h3 className="text-xl font-semibold text-center mb-8">核心功能</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Link href="/dashboard" className="block group">
+              <div className="border rounded-lg p-5 border-camp-300 bg-camp-50 group-hover:border-camp-500 group-hover:bg-camp-100 transition-colors">
+                <h4 className="font-medium text-camp-800 mb-2">招商业务驾驶舱</h4>
+                <p className="text-sm text-gray-600">实时监控招商数据、铺位状态、品牌能级</p>
+              </div>
+            </Link>
             <FeatureCard
               title="铺位图纸可视化"
               description="交互式楼层平面图，点击铺位即可查看详情，直观管理"
@@ -71,10 +80,6 @@ export default function HomePage() {
             <FeatureCard
               title="租户全周期管理"
               description="从招商到续约的完整租户与合同管理流程"
-            />
-            <FeatureCard
-              title="运维工单跟踪"
-              description="报修工单管理、维保计划安排、问题处理闭环"
             />
           </div>
         </div>

@@ -1,14 +1,49 @@
 # CAMP 变更日志
 
-## [2026-04-19] v0.1.14 - 驾驶舱前端基础设施
+## [2026-04-19] v0.1.14 - 招商业务驾驶舱
 
 ### 概述
-为招商驾驶舱（Kanban Dashboard）搭建前端基础设施：安装拖拽库、创建 Dashboard API 客户端、定义 TypeScript 类型。
+新增完整的招商业务驾驶舱（Kanban Dashboard）功能，包含质量监控、工具赋能、计划管控、市场资讯四大模块。支持 KPI 实时指标、Recharts 可视化图表、拖拽式招商状态看板、多维数据查询。
 
 ### 变更内容
-- 安装 `@hello-pangea/dnd` 拖拽库（Kanban 看板拖拽交互依赖）
-- 新增 `frontend/lib/dashboard-api.ts` - 驾驶舱专用 API 客户端（KPI统计、看板数据、铺位移动、空置分析、租赁期分布、品牌能级、到期合同、招商计划CRUD、市场资讯CRUD）
-- 扩展 `frontend/lib/types.ts` - 新增 Dashboard 类型（KPIMetric、DashboardKPIs、DashboardStats、KanbanCard、KanbanColumn、KanbanData、LeasingPlan、MarketNews）
+**数据模型扩展：**
+- `backend/app/models/tenant.py` - 新增 brand_tier(品牌能级S/A/B/C)、is_flagship(旗舰店)、is_first_entry(首进品牌) 字段
+- `backend/app/models/unit.py` - 新增 vacancy_days(空置天数)、leasing_type(招商类型) 字段
+- `backend/app/models/leasing_plan.py` - 新建 LeasingPlan 模型（招商计划，含目标/完成度/状态流转）
+- `backend/app/models/market_news.py` - 新建 MarketNews 模型（市场资讯 CMS）
+- `backend/app/models/mock_business_data.py` - 新建 MockBusinessData 模型（模拟经营数据）
+
+**后端 API（7+3+6 = 16 个新端点）：**
+- `backend/app/api/v1/dashboard.py` - 驾驶舱聚合 API（stats/kanban/kanban-move/vacancy/lease-term/brand-tier/expiring）
+- `backend/app/api/v1/plans.py` - 招商计划完整 CRUD
+- `backend/app/api/v1/news.py` - 市场资讯完整 CRUD + 发布切换
+
+**前端页面与组件（6 页面 + 11 组件）：**
+- `frontend/app/dashboard/page.tsx` - 主驾驶舱页（KPI 卡片 + 图表 + 看板 + 表格）
+- `frontend/app/dashboard/tools/brands/page.tsx` - 品牌信息查询
+- `frontend/app/dashboard/tools/units/page.tsx` - 铺位资源多维筛选查询
+- `frontend/app/dashboard/tools/projects/page.tsx` - 项目信息综合展示
+- `frontend/app/dashboard/news/page.tsx` - 市场资讯管理
+- `frontend/app/dashboard/plans/page.tsx` - 招商计划管控
+- `frontend/components/dashboard/KPICard.tsx` - KPI 指标卡片组件
+- `frontend/components/dashboard/ChartWrapper.tsx` - 图表统一容器
+- `frontend/components/dashboard/VacancyPieChart.tsx` - 空铺结构饼图
+- `frontend/components/dashboard/LeaseTermBarChart.tsx` - 租约期限柱状图
+- `frontend/components/dashboard/BrandTierDonut.tsx` - 品牌能级环形图
+- `frontend/components/dashboard/KanbanBoard.tsx` - 拖拽式招商状态看板（@hello-pangea/dnd）
+- `frontend/components/dashboard/KanbanCard.tsx` - 看板卡片
+- `frontend/components/dashboard/KanbanColumn.tsx` - 看板列容器
+- `frontend/components/dashboard/ExpiringContractsTable.tsx` - 即将到期合同表格
+- `frontend/components/dashboard/PlanProgressTable.tsx` - 计划进度表格
+- `frontend/components/dashboard/FilterBar.tsx` - 全局筛选栏
+
+**依赖更新：**
+- 新增 @hello-pangea/dnd 拖拽库
+- 新增 frontend/lib/dashboard-api.ts 看板专用 API 客户端
+- 扩展 frontend/lib/types.ts 看板相关 TypeScript 类型
+
+### 种子数据
+- `backend/scripts/seed_dashboard_data.py` - 品牌分级、招商计划、市场资讯、模拟经营数据
 
 ---
 
