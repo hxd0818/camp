@@ -8,7 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Use Chinese for all responses, explanations, and discussions
 - Address the user as "爸爸" (Dad) before answering
-- Code comments and technical documentation should be in English (international standard)
+- Code comments should be in English (international standard)
+- **All project documentation MUST be written in Chinese**, including but not limited to:
+  - `CHANGELOG.md` 及每日详细日志 `CHANGELOG_YYYY-MM-DD.md`
+  - 设计文档 (`docs/plans/` 目录下所有 .md 文件)
+  - README、CLAUDE.md 等项目说明文件
+  - commit message 摘要部分使用中文描述
 - User-facing messages and UI text should be in Chinese
 
 ## Project Overview
