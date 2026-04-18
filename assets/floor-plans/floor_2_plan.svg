@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e8e8e8" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#fafafa"/>
+  <rect x="20" y="20" width="1160" height="860" fill="url(#grid)" stroke="#bbb" stroke-width="2"/>
+
+  <!-- Title Bar -->
+  <rect x="20" y="20" width="1160" height="40" fill="#f0f0f0" stroke="#bbb" stroke-width="1"/>
+  <text x="35" y="46" font-family="Arial,sans-serif" font-size="16" font-weight="bold" fill="#333">SUNSHINE PLAZA</text>
+  <text x="200" y="46" font-family="Arial,sans-serif" font-size="14" fill="#666">Level 2 / 2F</text>
+  <text x="1100" y="46" font-family="Arial,sans-serif" font-size="12" fill="#999">Scale 1:300</text>
+
+  <!-- ==================== ATRIUM OVERLOOK (Center) ==================== -->
+  <rect x="420" y="140" width="360" height="400" rx="8" fill="#f0f4f8" stroke="#7ba3e0" stroke-width="2" stroke-dasharray="8,4"/>
+  <!-- Atrium railing -->
+  <rect x="430" y="150" width="340" height="380" rx="6" fill="none" stroke="#a0c0e0" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="600" y="320" font-family="Arial,sans-serif" font-size="20" font-weight="bold" fill="#7a9dbd" text-anchor="middle">ATRIUM</text>
+  <text x="600" y="342" font-family="Arial,sans-serif" font-size="12" fill="#9ab8d5" text-anchor="middle">Overlook (Open to L1)</text>
+  <circle cx="600" cy="280" r="50" fill="none" stroke="#c0d4e8" stroke-width="1.2" stroke-dasharray="5,3"/>
+
+  <!-- ==================== MAIN CORRIDOR (around atrium) ==================== -->
+  <rect x="80" y="160" width="320" height="80" fill="#fff" stroke="#ccc" stroke-width="1"/>
+  <rect x="80" y="440" width="320" height="80" fill="#fff" stroke="#ccc" stroke-width="1"/>
+  <rect x="800" y="160" width="320" height="80" fill="#fff" stroke="#ccc" stroke-width="1"/>
+  <rect x="800" y="440" width="320" height="80" fill="#fff" stroke="#ccc" stroke-width="1"/>
+  <rect x="450" y="70" width="300" height="60" fill="#fff" stroke="#ccc" stroke-width="1"/>
+  <rect x="450" y="550" width="300" height="90" fill="#fff" stroke="#ccc" stroke-width="1"/>
+
+  <!-- ==================== STORE UNITS - LEFT SIDE ==================== -->
+  <!-- Unit L2-01 -->
+  <rect x="80" y="80" width="150" height="70" rx="3" fill="#fff9e6" stroke="#e0c850" stroke-width="1.5"/>
+  <text x="155" y="112" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b8860b" text-anchor="middle">L2-01</text>
+  <text x="155" y="128" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">115 m²</text>
+  <line x1="80" y1="150" x2="230" y2="150" stroke="#e0c850" stroke-width="3"/>
+
+  <!-- Unit L2-02 -->
+  <rect x="245" y="80" width="155" height="70" rx="3" fill="#fff9e6" stroke="#e0c850" stroke-width="1.5"/>
+  <text x="322" y="112" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b8860b" text-anchor="middle">L2-02</text>
+  <text x="322" y="128" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">138 m²</text>
+  <line x1="245" y1="150" x2="400" y2="150" stroke="#e0c850" stroke-width="3"/>
+
+  <!-- Unit L2-03 (anchor - left mid) -->
+  <rect x="80" y="250" width="140" height="180" rx="3" fill="#f0f8ff" stroke="#6a9fd8" stroke-width="1.5"/>
+  <text x="150" y="335" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#4a7db8" text-anchor="middle">L2-03</text>
+  <text x="150" y="352" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">260 m²</text>
+  <line x1="220" y1="250" x2="220" y2="430" stroke="#6a9fd8" stroke-width="3"/>
+
+  <!-- Unit L2-04 -->
+  <rect x="80" y="530" width="150" height="130" rx="3" fill="#fff0f5" stroke="#d87a9f" stroke-width="1.5"/>
+  <text x="155" y="592" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b85a7a" text-anchor="middle">L2-04</text>
+  <text x="155" y="608" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">195 m²</text>
+  <line x1="80" y1="530" x2="230" y2="530" stroke="#d87a9f" stroke-width="3"/>
+
+  <!-- Unit L2-05 -->
+  <rect x="245" y="530" width="155" height="130" rx="3" fill="#fff0f5" stroke="#d87a9f" stroke-width="1.5"/>
+  <text x="322" y="592" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b85a7a" text-anchor="middle">L2-05</text>
+  <text x="322" y="608" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">188 m²</text>
+  <line x1="245" y1="530" x2="400" y2="530" stroke="#d87a9f" stroke-width="3"/>
+
+  <!-- ==================== STORE UNITS - RIGHT SIDE ==================== -->
+  <!-- Unit L2-06 -->
+  <rect x="805" y="80" width="150" height="70" rx="3" fill="#fff9e6" stroke="#e0c850" stroke-width="1.5"/>
+  <text x="880" y="112" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b8860b" text-anchor="middle">L2-06</text>
+  <text x="880" y="128" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">122 m²</text>
+  <line x1="805" y1="150" x2="955" y2="150" stroke="#e0c850" stroke-width="3"/>
+
+  <!-- Unit L2-07 -->
+  <rect x="970" y="80" width="150" height="70" rx="3" fill="#fff9e6" stroke="#e0c850" stroke-width="1.5"/>
+  <text x="1045" y="112" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b8860b" text-anchor="middle">L2-07</text>
+  <text x="1045" y="128" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">128 m²</text>
+  <line x1="970" y1="150" x2="1120" y2="150" stroke="#e0c850" stroke-width="3"/>
+
+  <!-- Unit L2-08 (anchor - right mid) -->
+  <rect x="980" y="250" width="140" height="180" rx="3" fill="#f0f8ff" stroke="#6a9fd8" stroke-width="1.5"/>
+  <text x="1050" y="335" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#4a7db8" text-anchor="middle">L2-08</text>
+  <text x="1050" y="352" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">265 m²</text>
+  <line x1="980" y1="250" x2="980" y2="430" stroke="#6a9fd8" stroke-width="3"/>
+
+  <!-- Unit L2-09 -->
+  <rect x="805" y="530" width="150" height="130" rx="3" fill="#fff0f5" stroke="#d87a9f" stroke-width="1.5"/>
+  <text x="880" y="592" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b85a7a" text-anchor="middle">L2-09</text>
+  <text x="880" y="608" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">205 m²</text>
+  <line x1="805" y1="530" x2="955" y2="530" stroke="#d87a9f" stroke-width="3"/>
+
+  <!-- Unit L2-10 -->
+  <rect x="970" y="530" width="150" height="130" rx="3" fill="#fff0f5" stroke="#d87a9f" stroke-width="1.5"/>
+  <text x="1045" y="592" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#b85a7a" text-anchor="middle">L2-10</text>
+  <text x="1045" y="608" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">198 m²</text>
+  <line x1="970" y1="530" x2="1120" y2="530" stroke="#d87a9f" stroke-width="3"/>
+
+  <!-- ==================== FOOD COURT AREA (Bottom Left) ==================== -->
+  <rect x="450" y="650" width="300" height="120" rx="5" fill="#fff8e8" stroke="#d4a020" stroke-width="2"/>
+  <text x="600" y="695" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#b8860b" text-anchor="middle">FOOD COURT</text>
+  <text x="600" y="715" font-family="Arial,sans-serif" font-size="10" fill="#996500" text-anchor="middle">12 Stalls | 580 m²</text>
+  <!-- Food court stalls -->
+  <rect x="465" y="725" width="40" height="35" rx="2" fill="#fff5dc" stroke="#d4a020" stroke-width="0.8"/>
+  <rect x="512" y="725" width="40" height="35" rx="2" fill="#fff5dc" stroke="#d4a020" stroke-width="0.8"/>
+  <rect x="559" y="725" width="40" height="35" rx="2" fill="#fff5dc" stroke="#d4a020" stroke-width="0.8"/>
+  <rect x="606" y="725" width="40" height="35" rx="2" fill="#fff5dc" stroke="#d4a020" stroke-width="0.8"/>
+  <rect x="653" y="725" width="40" height="35" rx="2" fill="#fff5dc" stroke="#d4a020" stroke-width="0.8"/>
+  <rect x="700" y="725" width="40" height="35" rx="2" fill="#fff5dc" stroke="#d4a020" stroke-width="0.8"/>
+
+  <!-- Top row units -->
+  <rect x="80" y="670" width="170" height="100" rx="3" fill="#f0fff0" stroke="#7ac47a" stroke-width="1.5"/>
+  <text x="165" y="718" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#4a9a4a" text-anchor="middle">L2-11</text>
+  <text x="165" y="734" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">170 m²</text>
+  <line x1="80" y1="670" x2="250" y2="670" stroke="#7ac47a" stroke-width="3"/>
+
+  <rect x="265" y="670" width="165" height="100" rx="3" fill="#f0fff0" stroke="#7ac47a" stroke-width="1.5"/>
+  <text x="347" y="718" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#4a9a4a" text-anchor="middle">L2-12</text>
+  <text x="347" y="734" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">165 m²</text>
+  <line x1="265" y1="670" x2="430" y2="670" stroke="#7ac47a" stroke-width="3"/>
+
+  <rect x="770" y="670" width="165" height="100" rx="3" fill="#f0fff0" stroke="#7ac47a" stroke-width="1.5"/>
+  <text x="852" y="718" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#4a9a4a" text-anchor="middle">L2-13</text>
+  <text x="852" y="734" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">168 m²</text>
+  <line x1="770" y1="670" x2="935" y2="670" stroke="#7ac47a" stroke-width="3"/>
+
+  <rect x="950" y="670" width="170" height="100" rx="3" fill="#f0fff0" stroke="#7ac47a" stroke-width="1.5"/>
+  <text x="1035" y="718" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#4a9a4a" text-anchor="middle">L2-14</text>
+  <text x="1035" y="734" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">175 m²</text>
+  <line x1="950" y1="670" x2="1120" y2="670" stroke="#7ac47a" stroke-width="3"/>
+
+  <!-- ==================== PUBLIC FACILITIES ==================== -->
+  <!-- Elevator Bank -->
+  <rect x="800" y="260" width="70" height="160" rx="3" fill="#f5f5f5" stroke="#888" stroke-width="1.5"/>
+  <text x="835" y="325" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#666" text-anchor="middle">ELEV</text>
+  <text x="835" y="340" font-family="Arial,sans-serif" font-size="9" fill="#999" text-anchor="middle">4 cars</text>
+  <rect x="815" y="275" width="18" height="24" rx="2" fill="none" stroke="#aaa" stroke-width="1"/>
+  <rect x="837" y="275" width="18" height="24" rx="2" fill="none" stroke="#aaa" stroke-width="1"/>
+  <rect x="815" y="305" width="18" height="24" rx="2" fill="none" stroke="#aaa" stroke-width="1"/>
+  <rect x="837" y="305" width="18" height="24" rx="2" fill="none" stroke="#aaa" stroke-width="1"/>
+
+  <!-- Restrooms -->
+  <rect x="330" y="260" width="80" height="160" rx="3" fill="#f0f0f0" stroke="#888" stroke-width="1.5"/>
+  <text x="370" y="310" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#666" text-anchor="middle">WC</text>
+  <circle cx="355" cy="340" r="8" fill="none" stroke="#999" stroke-width="1"/>
+  <line x1="355" y1="348" x2="355" y2="360" stroke="#999" stroke-width="1.2"/>
+  <line x1="349" y1="354" x2="361" y2="354" stroke="#999" stroke-width="1.2"/>
+  <circle cx="385" cy="337" r="7" fill="none" stroke="#999" stroke-width="1"/>
+  <path d="M380 350 Q385 360 390 350" fill="none" stroke="#999" stroke-width="1.2"/>
+  <line x1="385" y1="344" x2="385" y2="356" stroke="#999" stroke-width="1.2"/>
+
+  <!-- Escalators (both directions) -->
+  <rect x="520" y="550" width="75" height="50" rx="3" fill="#e8eef5" stroke="#7a9fc4" stroke-width="1.5"/>
+  <text x="557" y="572" font-family="Arial,sans-serif" font-size="8" font-weight="bold" fill="#5a7fa4" text-anchor="middle">ESC UP</text>
+  <rect x="605" y="550" width="75" height="50" rx="3" fill="#e8eef5" stroke="#7a9fc4" stroke-width="1.5"/>
+  <text x="642" y="572" font-family="Arial,sans-serif" font-size="8" font-weight="bold" fill="#5a7fa4" text-anchor="middle">ESC DN</text>
+
+  <!-- Stairs -->
+  <rect x="540" y="75" width="120" height="50" rx="3" fill="#e8eef5" stroke="#7a9fc4" stroke-width="1.5"/>
+  <text x="600" y="97" font-family="Arial,sans-serif" font-size="9" font-weight="bold" fill="#5a7fa4" text-anchor="middle">STAIR</text>
+  <line x1="555" y1="115" x2="555" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="565" y1="115" x2="565" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="575" y1="115" x2="575" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="585" y1="115" x2="585" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="595" y1="115" x2="595" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="605" y1="115" x2="605" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="615" y1="115" x2="615" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="625" y1="115" x2="625" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="635" y1="115" x2="635" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+  <line x1="645" y1="115" x2="645" y2="85" stroke="#7a9fc4" stroke-width="0.6"/>
+
+  <!-- Bridge connection from food court to atrium -->
+  <rect x="580" y="640" width="40" height="15" rx="2" fill="#e8eef5" stroke="#7a9fc4" stroke-width="1"/>
+
+  <!-- Side Entrances -->
+  <rect x="20" y="370" width="50" height="60" rx="2" fill="#e8f4e8" stroke="#5a9a5a" stroke-width="1.5"/>
+  <text x="45" y="395" font-family="Arial,sans-serif" font-size="8" font-weight="bold" fill="#3a7a3a" text-anchor="middle">ENT</text>
+  <text x="45" y="410" font-family="Arial,sans-serif" font-size="7" fill="#5a9a5a" text-anchor="middle">(W)</text>
+
+  <rect x="1130" y="370" width="50" height="60" rx="2" fill="#e8f4e8" stroke="#5a9a5a" stroke-width="1.5"/>
+  <text x="1155" y="395" font-family="Arial,sans-serif" font-size="8" font-weight="bold" fill="#3a7a3a" text-anchor="middle">ENT</text>
+  <text x="1155" y="410" font-family="Arial,sans-serif" font-size="7" fill="#5a9a5a" text-anchor="middle">(E)</text>
+
+  <!-- Info Box -->
+  <rect x="800" y="790" width="380" height="80" rx="4" fill="#f8f8f8" stroke="#ddd" stroke-width="1"/>
+  <text x="815" y="810" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#555">Floor Info</text>
+  <text x="815" y="828" font-family="Arial,sans-serif" font-size="9" fill="#777">Total Area: ~6,800 m² | Leasable: ~4,400 m²</text>
+  <text x="815" y="844" font-family="Arial,sans-serif" font-size="9" fill="#777">Units: 14 + Food Court | Common Area Ratio: 33%</text>
+  <text x="815" y="860" font-family="Arial,sans-serif" font-size="9" fill="#777">Ceiling Height: 3.8m | Status: Active</text>
+
+  <!-- North Arrow -->
+  <g transform="translate(1140, 830)">
+    <circle cx="0" cy="0" r="18" fill="none" stroke="#999" stroke-width="1"/>
+    <polygon points="0,-14 -5,4 0,-1 5,4" fill="#333"/>
+    <text x="0" y="-19" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="#333" text-anchor="middle">N</text>
+  </g>
+
+  <!-- Legend -->
+  <rect x="30" y="795" width="200" height="72" rx="4" fill="#fefefe" stroke="#ddd" stroke-width="1"/>
+  <text x="42" y="813" font-family="Arial,sans-serif" font-size="9" font-weight="bold" fill="#555">Legend</text>
+  <rect x="42" y="822" width="12" height="8" fill="#fff9e6" stroke="#e0c850" stroke-width="0.5"/>
+  <text x="60" y="830" font-family="Arial,sans-serif" font-size="8" fill="#666">Retail Store</text>
+  <rect x="42" y="836" width="12" height="8" fill="#f0f8ff" stroke="#6a9fd8" stroke-width="0.5"/>
+  <text x="60" y="844" font-family="Arial,sans-serif" font-size="8" fill="#666">Anchor Tenant</text>
+  <rect x="120" y="822" width="12" height="8" fill="#fff0f5" stroke="#d87a9f" stroke-width="0.5"/>
+  <text x="138" y="830" font-family="Arial,sans-serif" font-size="8" fill="#666">F&amp;B</text>
+  <rect x="120" y="836" width="12" height="8" fill="#fff8e8" stroke="#d4a020" stroke-width="0.5"/>
+  <text x="138" y="844" font-family="Arial,sans-serif" font-size="8" fill="#666">Food Court</text>
+  <rect x="42" y="850" width="12" height="8" fill="#f0f4f8" stroke="#7ba3e0" stroke-width="0.5"/>
+  <text x="60" y="858" font-family="Arial,sans-serif" font-size="8" fill="#666">Atrium Void</text>
+</svg>
