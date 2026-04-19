@@ -272,11 +272,11 @@ async def get_dashboard_stats(
     # ===================================================================
     # C. Expiring-Vacant Analysis (KPI #5)
     #   Units whose contract expired in last 30 days AND currently vacant.
-    #   Value reported in 10k sqm (wan m2) per PPT requirement.
+    #   Value reported as COUNT (number of units), unit = "个".
     #   Uses 'expired' contract status since expired contracts caused vacancy.
     # ===================================================================
     eva_result = await db.execute(
-        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        select(func.coalesce(func.count(Unit.id), 0))
         .join(Contract, Contract.unit_id == Unit.id)
         .where(
             Unit.floor_id.in_(floor_ids),
@@ -290,7 +290,7 @@ async def get_dashboard_stats(
 
     # Previous period for MoM (30-60 days ago)
     prev_eva_result = await db.execute(
-        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        select(func.coalesce(func.count(Unit.id), 0))
         .join(Contract, Contract.unit_id == Unit.id)
         .where(
             Unit.floor_id.in_(floor_ids),
@@ -303,9 +303,9 @@ async def get_dashboard_stats(
     prev_eva = float(prev_eva_result.scalar() or 0)
     eva_mom = _calc_mom(eva, prev_eva)
 
-    # Total expired area (for ratio denominator) - all contracts expired in window
+    # Total expired units in window (for ratio denominator)
     eta_result = await db.execute(
-        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        select(func.coalesce(func.count(Unit.id), 0))
         .join(Contract, Contract.unit_id == Unit.id)
         .where(
             Unit.floor_id.in_(floor_ids),
@@ -336,10 +336,10 @@ async def get_dashboard_stats(
     # ===================================================================
     # D. Warning-Vacant Analysis (KPI #6)
     #   Units vacant for >= 90 days (long-term vacancy warning).
-    #   Value reported in 10k sqm per PPT requirement.
+    #   Value reported as COUNT (number of units), unit = "个".
     # ===================================================================
     wva_result = await db.execute(
-        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        select(func.coalesce(func.count(Unit.id), 0))
         .where(
             Unit.floor_id.in_(floor_ids),
             Unit.status == "vacant",
@@ -348,10 +348,9 @@ async def get_dashboard_stats(
     )
     wva = float(wva_result.scalar() or 0)
 
-    # Previous period for MoM: compare with snapshot from 30 days ago
-    # Use units with vacancy_days >= 60 as proxy for previous period baseline
+    # Previous period for MoM: use vacancy_days >= 120 as baseline
     prev_wva_result = await db.execute(
-        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        select(func.coalesce(func.count(Unit.id), 0))
         .where(
             Unit.floor_id.in_(floor_ids),
             Unit.status == "vacant",
@@ -361,9 +360,9 @@ async def get_dashboard_stats(
     prev_wva = float(prev_wva_result.scalar() or 0)
     wva_mom = _calc_mom(wva, prev_wva)
 
-    # Total vacant area (for ratio denominator)
+    # Total vacant units (for ratio denominator)
     wta_result = await db.execute(
-        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        select(func.coalesce(func.count(Unit.id), 0))
         .where(
             Unit.floor_id.in_(floor_ids),
             Unit.status == "vacant",
@@ -516,10 +515,10 @@ async def get_dashboard_stats(
             new_vacant_area=_kpi(curr_nva, "m²", change=new_vacant_mom),
             vacant_area_ratio=_kpi(vacant_area_ratio, "%"),
             # Group 5: Expiring-vacant (area-based, reported in 10k sqm)
-            expiring_vacant_count=_kpi(round(eva / 10000, 2), "万m²", change=eva_mom),
+            expiring_vacant_count=_kpi(eva, "个", change=eva_mom),
             expiring_vacant_ratio=_kpi(expiring_vacant_ratio, "%"),
-            # Group 6: Warning-vacant (area-based, reported in 10k sqm)
-            warning_vacant_count=_kpi(round(wva / 10000, 2), "万m²", change=wva_mom),
+            # Group 6: Warning-vacant (count-based, unit = 个)
+            warning_vacant_count=_kpi(wva, "个", change=wva_mom),
             warning_vacant_ratio=_kpi(warning_vacant_ratio, "%"),
             # Group 7: Leasing plan completion
             leasing_completion_rate=_kpi(leasing_completion, "%"),
