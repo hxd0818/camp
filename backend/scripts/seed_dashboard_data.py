@@ -209,9 +209,9 @@ async def seed():
                 name="临期品牌续约推进计划",
                 plan_type=PlanType.ADJUSTMENT,
                 description=(
-                    "针对{year下半年至{year+1年上半年到期的合同进行提前续约谈判，"
+                    f"针对{current_year}年下半年至{current_year + 1}年上半年到期的合同进行提前续约谈判，"
                     "避免集中到期造成空置风险。涉及主力店和次主力店共4家。"
-                ).format(year=current_year),
+                ),
                 target_area=1200.0,
                 target_units=4,
                 completed_area=350.0,
