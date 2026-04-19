@@ -1,6 +1,23 @@
 """Dashboard aggregation APIs - core of CAMP Kanban dashboard.
 
-Extended with 13 KPI metrics + signing structure + brand tier trend + project info.
+Extended with 13 KPI metrics (19 fields), signing structure,
+brand tier trend, project info (simple + detail), and tool queries.
+
+KPI Index (PPT page 6):
+  1.  lease_adjustment_rate       - Rental/leasing adjustment growth (placeholder)
+  2.  cumulative_adjustment_rate   - Cumulative growth rate (placeholder)
+  3.  dynamic_occupancy_rate       - Occupancy by unit count
+      static_occupancy_rate        - Occupancy by leased area
+  4.  vacant_area / new_vacant_area / vacant_area_ratio
+  5.  expiring_vacant_count / expiring_vacant_ratio  (area in 10k sqm)
+  6.  warning_vacant_count / warning_vacant_ratio   (area in 10k sqm)
+  7.  leasing_completion_rate / leasing_early_completion_rate
+  8.  expiring_completion_rate
+  9.  warning_completion_rate
+  10. vacancy_removal_rate
+  11. lianfa_brand_ratio
+  12. lianfa_total_area / lianfa_area_ratio
+  13. new_lianfa_area
 """
 
 from datetime import date, timedelta, datetime
@@ -44,8 +61,8 @@ from app.schemas.dashboard import (
     SigningStructureBucket,
     BrandTierTrendResponse,
     BrandTierTrendItem,
-    ProjectInfoResponse,
     ProjectInfoCard,
+    ProjectInfoResponse,
     ProjectInfoDetailResponse,
     BasicInfoCard,
     OperationsCard,
@@ -58,7 +75,7 @@ from app.schemas.dashboard import (
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Constants
 # ---------------------------------------------------------------------------
 
 KANBAN_STATUS_MAP = {
@@ -90,6 +107,11 @@ BRAND_TIER_NAMES = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------------------------
+
+
 async def _get_mall_floor_ids(db: AsyncSession, mall_id: int) -> list[int]:
     """Return all floor IDs belonging to the given mall."""
     result = await db.execute(
@@ -108,12 +130,41 @@ async def _validate_mall(db: AsyncSession, mall_id: int) -> Mall:
 
 
 def _calc_ratio(numerator: float, denominator: float) -> float:
-    """Safe ratio calculation."""
+    """Safe ratio calculation returning percentage (0-100)."""
     return round(numerator / denominator * 100, 2) if denominator > 0 else 0.0
 
 
+def _calc_mom(current: float, previous: float) -> float:
+    """Calculate month-over-month change percentage.
+
+    Uses time-window comparison: current period vs previous period.
+    Returns 0.0 when both are zero.
+    Returns 100.0 when growing from 0 to positive (new appearance).
+    Returns negative when declining.
+    """
+    if previous == 0:
+        return 100.0 if current > 0 else 0.0
+    return round((current - previous) / abs(previous) * 100, 2)
+
+
+def _kpi(value: float, unit: str = "", change: float | None = None,
+         budget_variance: float | None = None) -> KPIMetric:
+    """Shorthand to create a KPIMetric with rounded value."""
+    return KPIMetric(
+        value=round(value, 2),
+        unit=unit,
+        change=change,
+        budget_variance=budget_variance,
+    )
+
+
+def _make_zero_kpi() -> KPIMetric:
+    """Create a zero-value KPI metric as fallback for empty malls."""
+    return KPIMetric(value=0.0, unit="")
+
+
 # ---------------------------------------------------------------------------
-# 1. GET /dashboard/stats?mall_id= (扩展到13项KPI)
+# 1. GET /dashboard/stats?mall_id=  (13 KPI groups, ~19 fields)
 # ---------------------------------------------------------------------------
 
 
@@ -124,51 +175,42 @@ async def get_dashboard_stats(
 ):
     """Return 13 KPI metrics for a mall.
 
-    Extended KPIs:
-    1. 租费招调增长率（预算±%, 月环比）
-    2. 累计招调增长率
-    3. 动态出租率 + 静态出租率 + 月环比
-    4. 空置总面积 + 新增空铺面积 + 占比 + 月环比
-    5. 到期铺出空 + 占比 + 月环比
-    6. 预警铺出空 + 占比 + 月环比
-    7. 招商按时完成率 + 提前30天完成率 + 月环比
-    8. 到期铺按时完成率 + 月环比
-    9. 预警铺按时完成率 + 月环比
-    10. 空铺去化按时完成率 + 月环比
-    11. 联发品牌占比%
-    12. 联发合作总面积万m² + 占比 + 月环比
-    13. 新增联发合作面积 + 月环比
+    All metrics calculated from real DB queries where possible.
+    Placeholder metrics (no data source yet): budget variance, cumulative growth.
+    Month-over-month uses time-window comparison (current vs previous period).
     """
     mall = await _validate_mall(db, mall_id)
     floor_ids = await _get_mall_floor_ids(db, mall_id)
 
+    zk = _make_zero_kpi()
+
+    # Zero-state response for malls without floors
     if not floor_ids:
-        zero_kpi = KPIMetric(value=0.0, unit="")
         return DashboardStatsResponse(
             mall_id=mall_id,
             mall_name=mall.name,
             period="today",
             kpis=DashboardKPIs(
-                lease_adjustment_rate=zero_kpi,
-                cumulative_adjustment_rate=zero_kpi,
-                dynamic_occupancy_rate=zero_kpi,
-                static_occupancy_rate=zero_kpi,
-                vacant_area=zero_kpi,
-                new_vacant_area=zero_kpi,
-                vacant_area_ratio=zero_kpi,
-                expiring_vacant_count=zero_kpi,
-                expiring_vacant_ratio=zero_kpi,
-                warning_vacant_count=zero_kpi,
-                warning_vacant_ratio=zero_kpi,
-                leasing_completion_rate=zero_kpi,
-                leasing_early_completion_rate=zero_kpi,
-                expiring_completion_rate=zero_kpi,
-                warning_completion_rate=zero_kpi,
-                vacancy_removal_rate=zero_kpi,
-                lianfa_brand_ratio=zero_kpi,
-                lianfa_total_area=zero_kpi,
-                lianfa_area_ratio=zero_kpi,
-                new_lianfa_area=zero_kpi,
+                lease_adjustment_rate=zk,
+                cumulative_adjustment_rate=zk,
+                dynamic_occupancy_rate=zk,
+                static_occupancy_rate=zk,
+                vacant_area=zk,
+                new_vacant_area=zk,
+                vacant_area_ratio=zk,
+                expiring_vacant_count=zk,
+                expiring_vacant_ratio=zk,
+                warning_vacant_count=zk,
+                warning_vacant_ratio=zk,
+                leasing_completion_rate=zk,
+                leasing_early_completion_rate=zk,
+                expiring_completion_rate=zk,
+                warning_completion_rate=zk,
+                vacancy_removal_rate=zk,
+                lianfa_brand_ratio=zk,
+                lianfa_total_area=zk,
+                lianfa_area_ratio=zk,
+                new_lianfa_area=zk,
             ),
             summary=DashboardSummary(
                 total_units=0, occupied_units=0, vacant_units=0,
@@ -177,13 +219,14 @@ async def get_dashboard_stats(
         )
 
     today = date.today()
+    month_start = today.replace(day=1)
+    prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
     today_plus_30 = today + timedelta(days=30)
     today_plus_90 = today + timedelta(days=90)
-    last_month = today.replace(day=1)
-    last_month_same_day = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
 
-    # --- 核心数据查询 ---
-    # 铺位聚合
+    # ===================================================================
+    # A. Core Unit Aggregation (foundational for many KPIs)
+    # ===================================================================
     unit_agg = await db.execute(
         select(
             func.count(Unit.id).label("total"),
@@ -202,89 +245,201 @@ async def get_dashboard_stats(
     leased_area = float(ua.leased_area or 0)
     vacant_area_val = float(ua.vacant_area or 0)
 
-    # 出租率
+    # KPI Group 3: Occupancy rates
     dynamic_occupancy = _calc_ratio(occupied_units, total_units)
     static_occupancy = _calc_ratio(leased_area, total_area)
 
-    # 新增空铺（本月）
-    new_vacant = await db.execute(
-        select(
-            func.count(Unit.id).label("count"),
-            func.coalesce(func.sum(Unit.gross_area), 0).label("area")
-        ).where(Unit.floor_id.in_(floor_ids), Unit.status == "vacant", Unit.updated_at >= last_month)
+    # ===================================================================
+    # B. New Vacant Area (this month) + MoM comparison
+    # ===================================================================
+    curr_new_vacant_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .where(Unit.floor_id.in_(floor_ids), Unit.status == "vacant", Unit.updated_at >= month_start)
     )
-    nv = new_vacant.one()
-    new_vacant_area_val = float(nv.area or 0)
+    curr_nva = float(curr_new_vacant_result.scalar() or 0)
 
-    # 到期铺位（30天内）
-    expiring_data = await db.execute(
-        select(Unit.status).join(Contract, Contract.unit_id == Unit.id).where(
+    prev_new_vacant_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .where(Unit.floor_id.in_(floor_ids), Unit.status == "vacant",
+               Unit.updated_at >= prev_month_start, Unit.updated_at < month_start)
+    )
+    prev_nva = float(prev_new_vacant_result.scalar() or 0)
+    new_vacant_mom = _calc_mom(curr_nva, prev_nva)
+
+    # KPI Group 4: Vacant area metrics
+    vacant_area_ratio = _calc_ratio(vacant_area_val, total_area)
+
+    # ===================================================================
+    # C. Expiring-Vacant Analysis (KPI #5)
+    #   Units whose contract expired in last 30 days AND currently vacant.
+    #   Value reported in 10k sqm (wan m2) per PPT requirement.
+    # ===================================================================
+    eva_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
+            Unit.floor_id.in_(floor_ids),
+            Unit.status == "vacant",
+            Contract.lease_end >= today - timedelta(days=30),
+            Contract.lease_end <= today,
+            Contract.status == "active",
+        )
+    )
+    eva = float(eva_result.scalar() or 0)
+
+    # Previous period for MoM (30-60 days ago)
+    prev_eva_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
+            Unit.floor_id.in_(floor_ids),
+            Unit.status == "vacant",
+            Contract.lease_end >= today - timedelta(days=60),
+            Contract.lease_end < today - timedelta(days=30),
+            Contract.status == "active",
+        )
+    )
+    prev_eva = float(prev_eva_result.scalar() or 0)
+    eva_mom = _calc_mom(eva, prev_eva)
+
+    # Total expired area (for ratio denominator)
+    eta_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
+            Unit.floor_id.in_(floor_ids),
+            Contract.lease_end >= today - timedelta(days=30),
+            Contract.lease_end <= today,
+            Contract.status == "active",
+        )
+    )
+    eta = float(eta_result.scalar() or 0)
+    expiring_vacant_ratio = _calc_ratio(eva, eta) if eta > 0 else 0.0
+
+    # Expiring status breakdown (for KPI #8: on-time completion rate)
+    expiring_status_result = await db.execute(
+        select(Unit.status)
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
             Unit.floor_id.in_(floor_ids),
             Contract.lease_end >= today,
             Contract.lease_end <= today_plus_30,
             Contract.status == "active"
         )
     )
-    expiring_statuses = [r[0] for r in expiring_data.all()]
-    expiring_total = len(expiring_statuses)
-    expiring_vacant = sum(1 for s in expiring_statuses if s == "vacant")
-    expiring_vacant_ratio = _calc_ratio(expiring_vacant, expiring_total)
-    expiring_completed = sum(1 for s in expiring_statuses if s == "occupied")
+    expiring_rows = expiring_status_result.all()
+    expiring_total = len(expiring_rows)
+    expiring_completed = sum(1 for r in expiring_rows if r[0] == "occupied")
     expiring_completion = _calc_ratio(expiring_completed, expiring_total)
 
-    # 预警铺位（90天内）
-    warning_data = await db.execute(
-        select(Unit.status).join(Contract, Contract.unit_id == Unit.id).where(
+    # ===================================================================
+    # D. Warning-Vacant Analysis (KPI #6)
+    #   Units with contracts expiring in 31-90 days AND currently vacant.
+    #   Value reported in 10k sqm per PPT requirement.
+    # ===================================================================
+    wva_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
+            Unit.floor_id.in_(floor_ids),
+            Unit.status == "vacant",
+            Contract.lease_end > today_plus_30,
+            Contract.lease_end <= today_plus_90,
+            Contract.status == "active",
+        )
+    )
+    wva = float(wva_result.scalar() or 0)
+
+    # Previous period for MoM
+    prev_wva_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
+            Unit.floor_id.in_(floor_ids),
+            Unit.status == "vacant",
+            Contract.lease_end > today_plus_30 - timedelta(days=30),
+            Contract.lease_end <= today_plus_90 - timedelta(days=30),
+            Contract.status == "active",
+        )
+    )
+    prev_wva = float(prev_wva_result.scalar() or 0)
+    wva_mom = _calc_mom(wva, prev_wva)
+
+    # Total warning area (for ratio denominator)
+    wta_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
+            Unit.floor_id.in_(floor_ids),
+            Contract.lease_end > today_plus_30,
+            Contract.lease_end <= today_plus_90,
+            Contract.status == "active",
+        )
+    )
+    wta = float(wta_result.scalar() or 0)
+    warning_vacant_ratio = _calc_ratio(wva, wta) if wta > 0 else 0.0
+
+    # Warning status breakdown (for KPI #9: on-time completion rate)
+    warning_status_result = await db.execute(
+        select(Unit.status)
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
             Unit.floor_id.in_(floor_ids),
             Contract.lease_end > today_plus_30,
             Contract.lease_end <= today_plus_90,
             Contract.status == "active"
         )
     )
-    warning_statuses = [r[0] for r in warning_data.all()]
-    warning_total = len(warning_statuses)
-    warning_vacant = sum(1 for s in warning_statuses if s == "vacant")
-    warning_vacant_ratio = _calc_ratio(warning_vacant, warning_total)
-    warning_completed = sum(1 for s in warning_statuses if s == "occupied")
+    warning_rows = warning_status_result.all()
+    warning_total = len(warning_rows)
+    warning_completed = sum(1 for r in warning_rows if r[0] == "occupied")
     warning_completion = _calc_ratio(warning_completed, warning_total)
 
-    # 招商计划完成率
-    plan_data = await db.execute(
+    # ===================================================================
+    # E. Leasing Plan Completion Rates (KPI #7)
+    # ===================================================================
+    plan_agg = await db.execute(
         select(
             func.count(LeasingPlan.id).label("total"),
             func.sum(case((LeasingPlan.status == PlanStatus.COMPLETED, 1), else_=0)).label("completed"),
-        ).where(LeasingPlan.mall_id == mall_id, LeasingPlan.target_date >= last_month)
+        ).where(LeasingPlan.mall_id == mall_id, LeasingPlan.due_date >= month_start)
     )
-    pd = plan_data.one()
+    pd = plan_agg.one()
     plan_total = int(pd.total or 0)
     plan_completed = int(pd.completed or 0)
     leasing_completion = _calc_ratio(plan_completed, plan_total)
 
-    # 提前30天完成
-    early_data = await db.execute(
+    # Early completion (completed >=30 days before due_date)
+    early_result = await db.execute(
         select(func.count(LeasingPlan.id)).where(
             LeasingPlan.mall_id == mall_id,
             LeasingPlan.status == PlanStatus.COMPLETED,
             LeasingPlan.completed_date.isnot(None),
-            LeasingPlan.target_date - LeasingPlan.completed_date >= timedelta(days=30)
+            LeasingPlan.due_date >= LeasingPlan.completed_date + timedelta(days=30)
         )
     )
-    early_count = early_data.scalar() or 0
+    early_count = early_result.scalar() or 0
     leasing_early = _calc_ratio(early_count, plan_total)
 
-    # 空铺去化
-    removal_data = await db.execute(
+    # ===================================================================
+    # F. Vacancy Removal Rate (KPI #10)
+    #   Units that changed status this month (have vacancy_days history)
+    #   and are now occupied -> successful absorption
+    # ===================================================================
+    removal_agg = await db.execute(
         select(
-            func.count(Unit.id).label("total"),
-            func.sum(case((Unit.status == "occupied", 1), else_=0)).label("occupied"),
-        ).where(Unit.floor_id.in_(floor_ids), Unit.updated_at >= last_month, Unit.vacancy_days.isnot(None))
+            func.count(Unit.id).label("total_changed"),
+            func.sum(case((Unit.status == "occupied", 1), else_=0)).label("now_occupied"),
+        ).where(Unit.floor_id.in_(floor_ids), Unit.updated_at >= month_start, Unit.vacancy_days.isnot(None))
     )
-    rd = removal_data.one()
-    removal_total = int(rd.total or 0)
-    removal_occupied = int(rd.occupied or 0)
+    rd = removal_agg.one()
+    removal_total = int(rd.total_changed or 0)
+    removal_occupied = int(rd.now_occupied or 0)
     vacancy_removal = _calc_ratio(removal_occupied, removal_total)
 
-    # 联发品牌统计
+    # ===================================================================
+    # G. Lianfa Brand Statistics (KPI #11, #12, #13)
+    # ===================================================================
     active_tenant_subq = (
         select(Contract.tenant_id_ref.distinct().label("tid"))
         .join(Unit, Contract.unit_id == Unit.id)
@@ -293,7 +448,7 @@ async def get_dashboard_stats(
 
     total_active = (await db.execute(select(func.count()).select_from(active_tenant_subq))).scalar() or 0
 
-    lianfa_data = await db.execute(
+    lianfa_agg = await db.execute(
         select(
             func.count(Tenant.id).label("count"),
             func.coalesce(func.sum(Unit.gross_area), 0).label("area")
@@ -303,53 +458,92 @@ async def get_dashboard_stats(
         .join(Unit, Unit.id == Contract.unit_id)
         .where(Tenant.brand_tier == BrandTier.LIANFA)
     )
-    ld = lianfa_data.one()
+    ld = lianfa_agg.one()
     lianfa_count = int(ld.count or 0)
     lianfa_area = float(ld.area or 0)
 
     lianfa_ratio = _calc_ratio(lianfa_count, total_active)
-    lianfa_area_ratio = _calc_ratio(lianfa_area, leased_area)
+    lianfa_area_ratio_calc = _calc_ratio(lianfa_area, leased_area)
 
-    # 新增联发面积
-    new_lianfa = await db.execute(
-        select(func.coalesce(func.sum(Unit.gross_area), 0)).join(
-            Contract, and_(Contract.unit_id == Unit.id, Contract.created_at >= last_month, Contract.status == "active")
-        ).where(Unit.floor_id.in_(floor_ids), Contract.tenant_id_ref.in_(
+    # New Lianfa area this month
+    new_lianfa_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, and_(Contract.unit_id == Unit.id, Contract.created_at >= month_start, Contract.status == "active"))
+        .where(Unit.floor_id.in_(floor_ids), Contract.tenant_id_ref.in_(
             select(Tenant.id).where(Tenant.brand_tier == BrandTier.LIANFA)
         ))
     )
-    new_lianfa_area_val = float(new_lianfa.scalar() or 0)
+    new_lianfa_area_val = float(new_lianfa_result.scalar() or 0)
 
-    # 月环比计算（与上月对比）
-    # 简化处理：实际应查询上月数据
-    mom_change = 0.0  # TODO: 实现月环比逻辑
+    # New Lianfa MoM (compare current month vs previous month)
+    prev_new_lianfa_result = await db.execute(
+        select(func.coalesce(func.sum(Unit.gross_area), 0))
+        .join(Contract, and_(
+            Contract.unit_id == Unit.id,
+            Contract.created_at >= prev_month_start,
+            Contract.created_at < month_start,
+            Contract.status == "active",
+        ))
+        .where(Unit.floor_id.in_(floor_ids), Contract.tenant_id_ref.in_(
+            select(Tenant.id).where(Tenant.brand_tier == BrandTier.LIANFA)
+        ))
+    )
+    prev_new_lianfa = float(prev_new_lianfa_result.scalar() or 0)
+    new_lianfa_mom = _calc_mom(new_lianfa_area_val, prev_new_lianfa)
 
-    # 构建响应
+    # Lianfa total area MoM proxy (use new area trend as indicator)
+    lianfa_mom = new_lianfa_mom if new_lianfa_area_val > 0 else 0.0
+
+    # ===================================================================
+    # H. Active Contracts Count
+    # ===================================================================
+    ac_result = await db.execute(
+        select(func.count(Contract.id))
+        .join(Unit, Contract.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), Contract.status == "active")
+    )
+    active_contracts = ac_result.scalar() or 0
+
+    # ===================================================================
+    # Build Response
+    # ===================================================================
     return DashboardStatsResponse(
         mall_id=mall_id,
         mall_name=mall.name,
         period=today.strftime("%Y-%m"),
         kpis=DashboardKPIs(
-            lease_adjustment_rate=KPIMetric(value=leasing_completion, unit="%", change=mom_change),
-            cumulative_adjustment_rate=KPIMetric(value=leasing_completion, unit="%", change=mom_change),
-            dynamic_occupancy_rate=KPIMetric(value=dynamic_occupancy, unit="%", change=mom_change),
-            static_occupancy_rate=KPIMetric(value=static_occupancy, unit="%", change=mom_change),
-            vacant_area=KPIMetric(value=vacant_area_val, unit="m²", change=mom_change),
-            new_vacant_area=KPIMetric(value=new_vacant_area_val, unit="m²", change=mom_change),
-            vacant_area_ratio=KPIMetric(value=_calc_ratio(vacant_area_val, total_area), unit="%", change=mom_change),
-            expiring_vacant_count=KPIMetric(value=float(expiring_vacant), unit="个", change=mom_change),
-            expiring_vacant_ratio=KPIMetric(value=expiring_vacant_ratio, unit="%", change=mom_change),
-            warning_vacant_count=KPIMetric(value=float(warning_vacant), unit="个", change=mom_change),
-            warning_vacant_ratio=KPIMetric(value=warning_vacant_ratio, unit="%", change=mom_change),
-            leasing_completion_rate=KPIMetric(value=leasing_completion, unit="%", change=mom_change),
-            leasing_early_completion_rate=KPIMetric(value=leasing_early, unit="%", change=mom_change),
-            expiring_completion_rate=KPIMetric(value=expiring_completion, unit="%", change=mom_change),
-            warning_completion_rate=KPIMetric(value=warning_completion, unit="%", change=mom_change),
-            vacancy_removal_rate=KPIMetric(value=vacancy_removal, unit="%", change=mom_change),
-            lianfa_brand_ratio=KPIMetric(value=lianfa_ratio, unit="%", change=mom_change),
-            lianfa_total_area=KPIMetric(value=round(lianfa_area / 10000, 2), unit="万m²", change=mom_change),
-            lianfa_area_ratio=KPIMetric(value=lianfa_area_ratio, unit="%", change=mom_change),
-            new_lianfa_area=KPIMetric(value=round(new_lianfa_area_val / 10000, 2), unit="万m²", change=mom_change),
+            # Group 1-2: Growth rates (placeholder - no budget/YTD table yet)
+            lease_adjustment_rate=_kpi(leasing_completion, "%", change=0.0),
+            cumulative_adjustment_rate=_kpi(leasing_completion, "%", change=0.0),
+            # Group 3: Occupancy rates
+            dynamic_occupancy_rate=_kpi(dynamic_occupancy, "%"),
+            static_occupancy_rate=_kpi(static_occupancy, "%"),
+            # Group 4: Vacant area analysis
+            vacant_area=_kpi(vacant_area_val, "m²"),
+            new_vacant_area=_kpi(curr_nva, "m²", change=new_vacant_mom),
+            vacant_area_ratio=_kpi(vacant_area_ratio, "%"),
+            # Group 5: Expiring-vacant (area-based, reported in 10k sqm)
+            expiring_vacant_count=_kpi(round(eva / 10000, 2), "万m²", change=eva_mom),
+            expiring_vacant_ratio=_kpi(expiring_vacant_ratio, "%"),
+            # Group 6: Warning-vacant (area-based, reported in 10k sqm)
+            warning_vacant_count=_kpi(round(wva / 10000, 2), "万m²", change=wva_mom),
+            warning_vacant_ratio=_kpi(warning_vacant_ratio, "%"),
+            # Group 7: Leasing plan completion
+            leasing_completion_rate=_kpi(leasing_completion, "%"),
+            leasing_early_completion_rate=_kpi(leasing_early, "%"),
+            # Group 8: Expiring on-time completion
+            expiring_completion_rate=_kpi(expiring_completion, "%"),
+            # Group 9: Warning on-time completion
+            warning_completion_rate=_kpi(warning_completion, "%"),
+            # Group 10: Vacancy removal on-time rate
+            vacancy_removal_rate=_kpi(vacancy_removal, "%"),
+            # Group 11: Lianfa brand ratio
+            lianfa_brand_ratio=_kpi(lianfa_ratio, "%"),
+            # Group 12: Lianfa total area
+            lianfa_total_area=_kpi(round(lianfa_area / 10000, 2), "万m²", change=lianfa_mom),
+            lianfa_area_ratio=_kpi(lianfa_area_ratio_calc, "%"),
+            # Group 13: New Lianfa area
+            new_lianfa_area=_kpi(round(new_lianfa_area_val / 10000, 2), "万m²", change=new_lianfa_mom),
         ),
         summary=DashboardSummary(
             total_units=total_units,
@@ -358,7 +552,7 @@ async def get_dashboard_stats(
             total_area=total_area,
             leased_area=leased_area,
             total_tenants=total_active,
-            active_contracts=0,  # 简化
+            active_contracts=active_contracts,
         ),
     )
 
@@ -371,11 +565,16 @@ async def get_dashboard_stats(
 @router.get("/signing-structure", response_model=SigningStructureResponse)
 async def get_signing_structure(
     mall_id: int = Query(..., description="Mall ID"),
-    start_date: date | None = Query(None, description="Start date filter"),
-    end_date: date | None = Query(None, description="End date filter"),
+    start_date: date | None = Query(None, description="Start date filter (inclusive)"),
+    end_date: date | None = Query(None, description="End date filter (inclusive)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return new vs renewal contract signing structure by area."""
+    """Return new-signed vs renewal contract structure by area and count.
+
+    Classification uses Contract.is_renewal field:
+      - is_renewal=True  -> renewal (续签)
+      - is_renewal=False or NULL -> new signing (新签, backward compatible)
+    """
     await _validate_mall(db, mall_id)
     floor_ids = await _get_mall_floor_ids(db, mall_id)
 
@@ -386,7 +585,6 @@ async def get_signing_structure(
     query_start = start_date or today.replace(day=1)
     query_end = end_date or today
 
-    # 查询本月签约合同
     result = await db.execute(
         select(
             Contract.is_renewal,
@@ -398,7 +596,7 @@ async def get_signing_structure(
             Unit.floor_id.in_(floor_ids),
             Contract.created_at >= query_start,
             Contract.created_at <= query_end,
-            Contract.status == "active"
+            Contract.status.in_(["active", "expiring"]),
         )
         .group_by(Contract.is_renewal)
     )
@@ -407,25 +605,28 @@ async def get_signing_structure(
     total_area = sum(float(r.area or 0) for r in rows)
     total_count = sum(int(r.count or 0) for r in rows)
 
+    # Aggregate: is_renewal=True -> renewal; else (False/NULL) -> new signing
+    renewal_area = sum(float(r.area or 0) for r in rows if r.is_renewal is True)
+    renewal_count = sum(int(r.count or 0) for r in rows if r.is_renewal is True)
+    new_area = sum(float(r.area or 0) for r in rows if r.is_renewal is not True)
+    new_count = sum(int(r.count or 0) for r in rows if r.is_renewal is not True)
+
     buckets = [
-        SigningStructureBucket(
-            type="renewal",
-            name="续签",
-            area=sum(float(r.area or 0) for r in rows if r.is_renewal is True),
-            count=sum(int(r.count or 0) for r in rows if r.is_renewal is True),
-            ratio=0.0,
-        ),
         SigningStructureBucket(
             type="new",
             name="新签",
-            area=sum(float(r.area or 0) for r in rows if r.is_renewal is False),
-            count=sum(int(r.count or 0) for r in rows if r.is_renewal is False),
-            ratio=0.0,
+            area=new_area,
+            count=new_count,
+            ratio=_calc_ratio(new_area, total_area) if total_area > 0 else 0.0,
+        ),
+        SigningStructureBucket(
+            type="renewal",
+            name="续签",
+            area=renewal_area,
+            count=renewal_count,
+            ratio=_calc_ratio(renewal_area, total_area) if total_area > 0 else 0.0,
         ),
     ]
-
-    for b in buckets:
-        b.ratio = _calc_ratio(b.area, total_area) if total_area > 0 else 0.0
 
     return SigningStructureResponse(buckets=buckets, total_area=total_area, total_count=total_count)
 
@@ -441,7 +642,12 @@ async def get_brand_tier_trend(
     months: int = Query(6, ge=1, le=12, description="Number of months to analyze"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return brand tier new entry trend with month-over-month comparison."""
+    """Return brand tier entry trend with month-over-month comparison.
+
+    For each brand tier (S/A/B/C/lianfa/unknown), returns:
+      - new_count: number of new contracts this month
+      - month_on_month: % change vs last month
+    """
     await _validate_mall(db, mall_id)
     floor_ids = await _get_mall_floor_ids(db, mall_id)
 
@@ -449,62 +655,53 @@ async def get_brand_tier_trend(
         return BrandTierTrendResponse(items=[], period="")
 
     today = date.today()
-    current_month = today.replace(day=1)
+    current_month_start = today.replace(day=1)
 
-    # 查询本月各能级新增品牌
-    subq = (
-        select(Contract.tenant_id_ref, Contract.created_at)
+    # Subquery: active contract -> tenant mappings in this mall
+    contract_tenant_subq = (
+        select(Contract.tenant_id_ref.label("tid"), Contract.created_at.label("created"))
         .join(Unit, Contract.unit_id == Unit.id)
         .where(Unit.floor_id.in_(floor_ids), Contract.status == "active")
     ).subquery()
 
-    # 本月新增
-    current_month_start = current_month
-    current_month_end = today
-
+    # Current month new entries per tier
     current_data = await db.execute(
-        select(Tenant.brand_tier, func.count().label("count"))
-        .join(subq, Tenant.id == subq.c.tenant_id)
-        .where(subq.c.created_at >= current_month_start, subq.c.created_at <= current_month_end)
+        select(Tenant.brand_tier, func.count().label("cnt"))
+        .join(contract_tenant_subq, Tenant.id == contract_tenant_subq.c.tid)
+        .where(contract_tenant_subq.c.created >= current_month_start)
         .group_by(Tenant.brand_tier)
     )
-    current_rows = {r[0]: int(r[1]) for r in current_data.all()}
+    current_map = {r[0]: int(r[1]) for r in current_data.all()}
 
-    # 上月新增（用于计算环比）
-    last_month_start = (current_month - timedelta(days=1)).replace(day=1)
-    last_month_end = current_month - timedelta(days=1)
+    # Previous month (for MoM calculation)
+    prev_month_start = (current_month_start - timedelta(days=1)).replace(day=1)
+    prev_month_end = current_month_start - timedelta(days=1)
 
-    last_data = await db.execute(
-        select(Tenant.brand_tier, func.count().label("count"))
-        .join(subq, Tenant.id == subq.c.tenant_id)
-        .where(subq.c.created_at >= last_month_start, subq.c.created_at <= last_month_end)
+    prev_data = await db.execute(
+        select(Tenant.brand_tier, func.count().label("cnt"))
+        .join(contract_tenant_subq, Tenant.id == contract_tenant_subq.c.tid)
+        .where(contract_tenant_subq.c.created >= prev_month_start,
+               contract_tenant_subq.c.created <= prev_month_end)
         .group_by(Tenant.brand_tier)
     )
-    last_rows = {r[0]: int(r[1]) for r in last_data.all()}
+    prev_map = {r[0]: int(r[1]) for r in prev_data.all()}
 
     items = []
     for tier_key, tier_name in BRAND_TIER_NAMES.items():
         tier_enum = BrandTier(tier_key) if tier_key != "unknown" else None
-        current_count = current_rows.get(tier_enum, 0)
-        last_count = last_rows.get(tier_enum, 0)
-
-        # 计算环比
-        if last_count > 0:
-            mom = round((current_count - last_count) / last_count * 100, 1)
-        elif current_count > 0:
-            mom = 100.0  # 从0到X视为+100%
-        else:
-            mom = 0.0
+        current_cnt = current_map.get(tier_enum, 0)
+        prev_cnt = prev_map.get(tier_enum, 0)
+        mom = _calc_mom(float(current_cnt), float(prev_cnt))
 
         items.append(BrandTierTrendItem(
             tier=tier_key,
             tier_name=tier_name,
-            new_count=current_count,
+            new_count=current_cnt,
             month_on_month=mom,
             color=BRAND_TIER_COLORS.get(tier_key, BRAND_TIER_COLORS["unknown"]),
         ))
 
-    return BrandTierTrendResponse(items=items, period=current_month.strftime("%Y-%m"))
+    return BrandTierTrendResponse(items=items, period=current_month_start.strftime("%Y-%m"))
 
 
 # ---------------------------------------------------------------------------
@@ -517,38 +714,45 @@ async def get_project_info(
     mall_id: int = Query(..., description="Mall ID"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return comprehensive project info with 4 key cards."""
+    """Return project overview with 4 summary cards.
+
+    Cards:
+      1. lease_adjustment  - Leasing adjustment progress (completion rate)
+      2. vacancy_analysis  - Vacancy rate and area
+      3. leasing_progress  - Urgent plans needing action within 30 days
+      4. lianfa_stats      - Lianfa brand cooperation stats
+    """
     mall = await _validate_mall(db, mall_id)
     floor_ids = await _get_mall_floor_ids(db, mall_id)
 
     today = date.today()
-    last_month = today.replace(day=1)
+    month_start = today.replace(day=1)
 
-    cards = []
+    cards: list[ProjectInfoCard] = []
 
-    # Card 1: 租费招调
-    leasing_data = await db.execute(
+    # Card 1: Leasing Adjustment Progress
+    plan_agg = await db.execute(
         select(
             func.count(LeasingPlan.id).label("total"),
-            func.sum(case((LeasingPlan.status == PlanStatus.COMPLETED, 1), else_=0)).label("completed")
-        ).where(LeasingPlan.mall_id == mall_id, LeasingPlan.target_date >= last_month)
+            func.sum(case((LeasingPlan.status == PlanStatus.COMPLETED, 1), else_=0)).label("completed"),
+        ).where(LeasingPlan.mall_id == mall_id, LeasingPlan.due_date >= month_start)
     )
-    ld = leasing_data.one()
-    plan_total = int(ld.total or 0)
-    plan_completed = int(ld.completed or 0)
-    completion_rate = _calc_ratio(plan_completed, plan_total)
+    pr = plan_agg.one()
+    p_total = int(pr.total or 0)
+    p_done = int(pr.completed or 0)
+    p_rate = _calc_ratio(p_done, p_total)
 
     cards.append(ProjectInfoCard(
         card_id="lease_adjustment",
         title="租费招调",
-        value=f"{completion_rate}%",
-        subtitle=f"完成 {plan_completed}/{plan_total} 项",
-        change=5.2,  # 模拟数据
-        trend="up" if completion_rate > 80 else "neutral",
+        value=f"{p_rate}%",
+        subtitle=f"完成 {p_done}/{p_total} 项计划",
+        change=None,  # Requires historical data for real MoM
+        trend="up" if p_rate >= 80 else ("neutral" if p_rate >= 50 else "down"),
     ))
 
-    # Card 2: 空置分析
-    vacancy_data = await db.execute(
+    # Card 2: Vacancy Analysis
+    vac_agg = await db.execute(
         select(
             func.count(Unit.id).label("total"),
             func.sum(case((Unit.status == "vacant", 1), else_=0)).label("vacant"),
@@ -556,62 +760,61 @@ async def get_project_info(
             func.coalesce(func.sum(case((Unit.status == "vacant", Unit.gross_area), else_=0)), 0).label("vacant_area"),
         ).where(Unit.floor_id.in_(floor_ids))
     )
-    vd = vacancy_data.one()
-    total_units = int(vd.total or 0)
-    vacant_units = int(vd.vacant or 0)
-    total_area_val = float(vd.total_area or 0)
-    vacant_area_val = float(vd.vacant_area or 0)
-    vacancy_rate = _calc_ratio(vacant_units, total_units)
+    vr = vac_agg.one()
+    v_total = int(vr.total or 0)
+    v_vacant = int(vr.vacant or 0)
+    v_va = float(vr.vacant_area or 0)
+    v_rate = _calc_ratio(v_vacant, v_total)
 
     cards.append(ProjectInfoCard(
         card_id="vacancy_analysis",
         title="空置分析",
-        value=f"{vacancy_rate}%",
-        subtitle=f"{vacant_units}个空铺 / {int(vacant_area_val)}m²",
-        change=-2.1,  # 改善
-        trend="down" if vacancy_rate < 20 else "neutral",
+        value=f"{v_rate}%",
+        subtitle=f"{v_vacant}个空铺 / {int(v_va)}m²",
+        change=None,
+        trend="down" if v_rate < 15 else ("neutral" if v_rate < 25 else "up"),
     ))
 
-    # Card 3: 招商进度
-    active_plans = await db.execute(
+    # Card 3: Leasing Progress (urgent items within 30 days)
+    urgent_result = await db.execute(
         select(func.count(LeasingPlan.id)).where(
             LeasingPlan.mall_id == mall_id,
             LeasingPlan.status.in_([PlanStatus.PENDING, PlanStatus.IN_PROGRESS]),
-            LeasingPlan.target_date <= today + timedelta(days=30)
+            LeasingPlan.due_date <= today + timedelta(days=30),
         )
     )
-    urgent_count = active_plans.scalar() or 0
+    urgent_count = urgent_result.scalar() or 0
 
     cards.append(ProjectInfoCard(
         card_id="leasing_progress",
         title="招商进度",
         value=f"{urgent_count}",
-        subtitle="30天内到期需招商",
+        subtitle="30天内需完成招商项",
         change=None,
-        trend="neutral",
+        trend="down" if urgent_count > 5 else "neutral",
     ))
 
-    # Card 4: 联发统计
-    lianfa_result = await db.execute(
+    # Card 4: Lianfa Statistics
+    lianfa_agg = await db.execute(
         select(
             func.count(Tenant.id).label("count"),
-            func.coalesce(func.sum(Unit.gross_area), 0).label("area")
+            func.coalesce(func.sum(Unit.gross_area), 0).label("area"),
         )
         .join(Contract, and_(Contract.tenant_id_ref == Tenant.id, Contract.status == "active"))
         .join(Unit, Unit.id == Contract.unit_id)
         .where(Unit.floor_id.in_(floor_ids), Tenant.brand_tier == BrandTier.LIANFA)
     )
-    lr = lianfa_result.one()
-    lianfa_count = int(lr.count or 0)
-    lianfa_area = float(lr.area or 0)
+    lr = lianfa_agg.one()
+    lf_count = int(lr.count or 0)
+    lf_area = float(lr.area or 0)
 
     cards.append(ProjectInfoCard(
         card_id="lianfa_stats",
         title="联发统计",
-        value=f"{lianfa_count}个",
-        subtitle=f"合作面积 {int(lianfa_area)}m²",
-        change=3.5,
-        trend="up",
+        value=f"{lf_count}个品牌",
+        subtitle=f"合作面积 {int(lf_area)}m² ({round(lf_area/10000, 2)}万m²)",
+        change=None,
+        trend="up" if lf_count > 0 else "neutral",
     ))
 
     return ProjectInfoResponse(

@@ -259,6 +259,14 @@ class ProjectInfoCard(BaseModel):
     trend: str = "neutral"  # "up", "down", "neutral"
 
 
+class ProjectInfoResponse(BaseModel):
+    """项目综合信息API响应 - 简化版"""
+    mall_id: int
+    mall_name: str
+    cards: list[ProjectInfoCard]
+    updated_at: datetime
+
+
 class BasicInfoCard(BaseModel):
     """基础信息卡片"""
     opening_date: str | None = None
