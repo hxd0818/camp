@@ -225,6 +225,7 @@ export interface KPIMetric {
   value: number;
   change: number | null;
   unit: string;
+  budget_variance?: number | null; // Budget variance percentage (future use)
 }
 
 export interface DashboardKPIs {
@@ -361,7 +362,7 @@ export interface ExpiringContractItem {
 // --- Signing Structure Types ---
 
 export interface SigningStructureBucket {
-  type: 'new' | 'renewal' | 'transfer';
+  type: 'new' | 'renewal';
   name: string;
   area: number;
   count: number;

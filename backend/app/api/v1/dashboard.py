@@ -779,7 +779,7 @@ async def get_project_info(
     urgent_result = await db.execute(
         select(func.count(LeasingPlan.id)).where(
             LeasingPlan.mall_id == mall_id,
-            LeasingPlan.status.in_([PlanStatus.PENDING, PlanStatus.IN_PROGRESS]),
+            LeasingPlan.status.in_([PlanStatus.DRAFT, PlanStatus.ACTIVE, PlanStatus.IN_PROGRESS]),
             LeasingPlan.due_date <= today + timedelta(days=30),
         )
     )
@@ -972,18 +972,21 @@ async def get_project_detail(
     )
     floor_rows = floor_structure_result.all()
 
-    # 获取到期预警（30天内）
-    expiring_subq = (
-        select(Unit.floor_id, func.count().label("cnt"))
-        .join(Contract, Contract.unit_id == Unit.id)
-        .where(
-            Unit.floor_id.in_(floor_ids),
-            Contract.status == "active",
-            Contract.lease_end >= today,
-            Contract.lease_end <= today_plus_30
+    # Bulk query: expiring contract counts per floor (avoid N+1 in loop)
+    expiring_map: dict[int, int] = {}
+    if floor_ids:
+        expiring_bulk = await db.execute(
+            select(Unit.floor_id, func.count(Contract.id))
+            .join(Contract, Contract.unit_id == Unit.id)
+            .where(
+                Unit.floor_id.in_(floor_ids),
+                Contract.status == "active",
+                Contract.lease_end >= today,
+                Contract.lease_end <= today_plus_30,
+            )
+            .group_by(Unit.floor_id),
         )
-        .group_by(Unit.floor_id)
-    ).subquery()
+        expiring_map = {row[0]: row[1] for row in expiring_bulk.all()}
 
     floor_items = []
     total_units_sum = 0
@@ -999,18 +1002,8 @@ async def get_project_detail(
         leased_area_val = float(r.leased_area or 0)
         occupancy_rate = _calc_ratio(occupied, total_units)
 
-        # 获取到期预警数量
-        expiring_result = await db.execute(
-            select(func.count(Contract.id))
-            .join(Unit, Contract.unit_id == Unit.id)
-            .where(
-                Unit.floor_id == r[0],
-                Contract.status == "active",
-                Contract.lease_end >= today,
-                Contract.lease_end <= today_plus_30
-            )
-        )
-        expiring_count = expiring_result.scalar() or 0
+        # Look up expiring count from pre-fetched map
+        expiring_count = expiring_map.get(r[0], 0)
 
         floor_items.append(FloorStructureItem(
             floor_id=r[0],
@@ -1423,7 +1416,7 @@ async def query_units_tool(
             leasing_type=unit.leasing_type,
             lease_end=row[7].isoformat() if row[7] else None,
             vacancy_days=unit.vacancy_days,
-            previous_rent=None,  # TODO: 从历史合同获取
+            previous_rent=None,  # Historical contract rent (to be implemented)
         ))
 
     return ToolUnitsResponse(data=items, total=len(items))

@@ -17,7 +17,6 @@ interface SigningData {
 const TYPE_COLORS: Record<string, string> = {
   new: '#0ea5e9',
   renewal: '#22c55e',
-  transfer: '#f59e0b',
 };
 
 interface Props {
