@@ -128,11 +128,11 @@ export default function PlanProgressTable({
                   </td>
                   <td className="px-3 py-2 text-right text-gray-500">
                     {plan.target_area
-                      ? `${plan.target_area.toLocaleString()} m&sup2;`
+                      ? `${plan.target_area.toLocaleString()} m²`
                       : '-'}
                   </td>
                   <td className="px-3 py-2 text-right text-gray-600">
-                    {plan.completed_area.toLocaleString()} m&sup2;
+                    {plan.completed_area.toLocaleString()} m²
                   </td>
                   <td className="px-3 py-2 w-32">
                     <div className="w-full bg-gray-200 rounded-full h-1.5">

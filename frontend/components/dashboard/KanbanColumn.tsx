@@ -65,7 +65,7 @@ export default function KanbanColumn({ column }: KanbanColumnProps) {
           <div className="mt-2 space-y-1">
             {/* Area */}
             {column.total_area > 0 && (
-              <p className="text-xs text-gray-400">{column.total_area.toLocaleString()} m&sup2;</p>
+              <p className="text-xs text-gray-400">{column.total_area.toLocaleString()} m²</p>
             )}
             {/* Quick breakdown */}
             <div className="flex gap-2 text-xs">

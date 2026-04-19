@@ -49,7 +49,7 @@ export default function KanbanCard({ card, provided }: KanbanCardProps) {
       <div className="flex items-center justify-between mb-1">
         <span className="font-semibold text-sm text-gray-900">{card.unit_code}</span>
         {card.area != null && (
-          <span className="text-xs text-gray-400">{card.area} m&sup2;</span>
+          <span className="text-xs text-gray-400">{card.area} m²</span>
         )}
       </div>
 
