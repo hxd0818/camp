@@ -1,16 +1,26 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import FilterBar from '@/components/dashboard/FilterBar';
 import KPICard from '@/components/dashboard/KPICard';
-import ChartWrapper from '@/components/dashboard/ChartWrapper';
-import VacancyPieChart from '@/components/dashboard/VacancyPieChart';
-import LeaseTermBarChart from '@/components/dashboard/LeaseTermBarChart';
-import BrandTierDonut from '@/components/dashboard/BrandTierDonut';
 import KanbanBoard from '@/components/dashboard/KanbanBoard';
 import ExpiringContractsTable from '@/components/dashboard/ExpiringContractsTable';
 import PlanProgressTable from '@/components/dashboard/PlanProgressTable';
 import { dashboardApi } from '@/lib/dashboard-api';
+
+const VacancyPieChart = dynamic(
+  () => import('@/components/dashboard/VacancyPieChart'),
+  { ssr: false }
+);
+const LeaseTermBarChart = dynamic(
+  () => import('@/components/dashboard/LeaseTermBarChart'),
+  { ssr: false }
+);
+const BrandTierDonut = dynamic(
+  () => import('@/components/dashboard/BrandTierDonut'),
+  { ssr: false }
+);
 import type {
   DashboardStats,
   KanbanData,

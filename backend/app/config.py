@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3201"]
 
     # File Upload
     upload_dir: str = "/app/uploads"

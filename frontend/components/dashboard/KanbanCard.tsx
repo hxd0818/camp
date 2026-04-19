@@ -14,10 +14,10 @@ interface KanbanCardProps {
     vacancy_days: number | null;
     monthly_rent: number | null;
   };
-  provided: {
+  provided?: {
     innerRef: (el: HTMLElement | null) => void;
     draggableProps: Record<string, unknown>;
-    style: Record<string, unknown>;
+    style?: Record<string, unknown>;
   };
 }
 
@@ -29,12 +29,20 @@ const TIER_COLORS: Record<string, string> = {
   lianfa: 'bg-cyan-50 text-cyan-600',
 };
 
+const TIER_LABELS: Record<string, string> = {
+  s: 'S级',
+  a: 'A级',
+  b: 'B级',
+  c: 'C级',
+  lianfa: '联发',
+};
+
 export default function KanbanCard({ card, provided }: KanbanCardProps) {
   return (
     <div
-      ref={provided.innerRef}
-      {...provided.draggableProps}
-      style={provided.style}
+      ref={provided?.innerRef}
+      {...(provided?.draggableProps || {})}
+      style={provided?.style}
       className="bg-white rounded-lg border p-3 mb-2 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"
     >
       {/* Unit code and area */}
@@ -67,7 +75,7 @@ export default function KanbanCard({ card, provided }: KanbanCardProps) {
             TIER_COLORS[card.brand_tier] || 'bg-gray-100 text-gray-500'
           }`}
         >
-          {card.brand_tier.toUpperCase()}
+          {TIER_LABELS[card.brand_tier] || card.brand_tier.toUpperCase()}
         </span>
       )}
 

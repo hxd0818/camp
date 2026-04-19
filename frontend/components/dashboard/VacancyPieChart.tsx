@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, Label, LabelList } from 'recharts';
 import ChartWrapper from './ChartWrapper';
 
 interface VacancyData {
@@ -12,10 +12,10 @@ interface VacancyData {
 }
 
 const BUCKET_COLORS: Record<string, string> = {
-  '\u77ed\u671f': '#22c55e',
-  '\u4e2d\u671f': '#f59e0b',
-  '\u957f\u671f': '#f97316',
-  '\u8d85\u957f\u671f': '#ef4444',
+  '短期': '#22c55e',
+  '中期': '#f59e0b',
+  '长期': '#f97316',
+  '超长期': '#ef4444',
 };
 
 interface Props {
@@ -23,36 +23,90 @@ interface Props {
   loading?: boolean;
 }
 
+const RADIAN = Math.PI / 180;
+
+function renderCustomLabel({
+  cx,
+  cy,
+  midAngle,
+  outerRadius,
+  name,
+  count,
+}: Record<string, unknown>) {
+  const radius = Number(outerRadius) + 28;
+  const x = (cx as number) + radius * Math.cos(-(midAngle as number) * RADIAN);
+  const y = (cy as number) + radius * Math.sin(-(midAngle as number) * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#374151"
+      textAnchor={x > (cx as number) ? 'start' : 'end'}
+      dominantBaseline="central"
+      fontSize={11}
+      fontWeight={500}
+    >
+      {name as string} ({count})
+    </text>
+  );
+}
+
+function renderCustomConnector({
+  cx,
+  cy,
+  midAngle,
+  outerRadius,
+}: Record<string, unknown>) {
+  const or = Number(outerRadius);
+  const ma = midAngle as number;
+  const cxx = cx as number;
+  const cyy = cy as number;
+
+  return (
+    <path
+      d={`M${cxx + or * Math.cos(-ma * RADIAN)},${
+        cyy + or * Math.sin(-ma * RADIAN)
+      }L${cxx + (or + 22) * Math.cos(-ma * RADIAN)},${
+        cyy + (or + 22) * Math.sin(-ma * RADIAN)
+      }`}
+      stroke="#9ca3af"
+      strokeWidth={1}
+      fill="none"
+    />
+  );
+}
+
 export default function VacancyPieChart({ data, loading }: Props) {
   const isEmpty = !data || data.length === 0 || data.every(d => d.value === 0);
 
+  const displayData = data.filter(d => d.value > 0);
+  const total = displayData.reduce((s, d) => s + d.value, 0);
+
   return (
-    <ChartWrapper title="\u7a7a\u94fa\u7ed3\u6784" loading={loading} empty={isEmpty}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
+    <ChartWrapper title="空置结构" loading={loading} empty={isEmpty}>
+      <div className="flex items-center justify-center w-full h-full overflow-visible">
+        <PieChart width={340} height={260}>
           <Pie
-            data={data}
-            cx="40%"
-            cy="50%"
-            innerRadius={50}
-            outerRadius={75}
-            paddingAngle={2}
+            data={displayData}
+            cx="50%"
+            cy="48%"
+            innerRadius={42}
+            outerRadius={72}
+            paddingAngle={3}
             dataKey="value"
+            stroke="none"
+            labelLine={renderCustomConnector}
+            label={renderCustomLabel}
           >
-            {data.map((entry, index) => (
+            {displayData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.color || BUCKET_COLORS[entry.name] || '#94a3b8'} />
             ))}
           </Pie>
-          <Tooltip formatter={(value: number, name: string) => [`${value.toLocaleString()} \u33a1`, name]} />
-          <Legend
-            verticalAlign="middle"
-            align="right"
-            iconType="circle"
-            iconSize={8}
-            formatter={(value: string) => `${value} (${data.find(d => d.name === value)?.count || 0})`}
-          />
+          <Tooltip formatter={(value: number, name: string) => [`${value.toLocaleString()} m²`, name]} />
         </PieChart>
-      </ResponsiveContainer>
+
+      </div>
     </ChartWrapper>
   );
 }

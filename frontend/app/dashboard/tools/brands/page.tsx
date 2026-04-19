@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { dashboardApi } from '@/lib/dashboard-api';
 
 interface BrandRow {
   id: number;
@@ -51,25 +50,26 @@ export default function BrandsQueryPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res: any = await dashboardApi.getStats(1);
-      // The brands data comes from the brand-tier endpoint or stats
-      // Use a dedicated approach - we'll use the stats/brand-tier composite
-      const brandRes: any = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/dashboard/tools/brands?` +
-          new URLSearchParams({
-            search,
-            tier: tierFilter !== 'all' ? tierFilter : '',
-            status: statusFilter,
-            skip: String(skip),
-            limit: String(PAGE_SIZE),
-          })
-      ).then((r) => r.json());
+      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/dashboard/tools/brands?` +
+        new URLSearchParams({
+          mall_id: '1',
+          search,
+          tier: tierFilter !== 'all' ? tierFilter : '',
+          status: statusFilter,
+          skip: String(skip),
+          limit: String(PAGE_SIZE),
+        });
+
+      const brandRes: any = await fetch(apiUrl).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        return r.json();
+      });
 
       const items: BrandRow[] = brandRes.data ?? brandRes ?? [];
       const count: number = brandRes.total ?? items.length;
       setData(items);
       setTotal(count);
-    } catch {
+    } catch (err) {
       setData([]);
       setTotal(0);
     } finally {

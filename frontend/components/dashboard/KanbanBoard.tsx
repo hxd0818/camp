@@ -13,21 +13,21 @@ interface Props {
 export default function KanbanBoard({ mallId }: Props) {
   const [data, setData] = useState<KanbanData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [floorFilter, setFloorFilter] = useState<number | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await dashboardApi.getKanban(mallId, {
-        floor_id: floorFilter,
-      });
+      const res = await dashboardApi.getKanban(mallId);
       setData(res as unknown as KanbanData);
-    } catch {
+    } catch (err: any) {
+      setError(err?.message || String(err));
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [mallId, floorFilter]);
+  }, [mallId]);
 
   useEffect(() => {
     fetchData();
@@ -36,7 +36,6 @@ export default function KanbanBoard({ mallId }: Props) {
   const handleDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
 
-    // Ignore drops outside droppables or same-column reorders
     if (!destination || destination.droppableId === source.droppableId) {
       return;
     }
@@ -46,14 +45,12 @@ export default function KanbanBoard({ mallId }: Props) {
         parseInt(result.draggableId),
         destination.droppableId
       );
-      // Refresh data after successful move
       await fetchData();
     } catch {
-      // Error handled silently - data stays unchanged
+      // Error handled silently
     }
   };
 
-  // Loading skeleton
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -64,10 +61,15 @@ export default function KanbanBoard({ mallId }: Props) {
     );
   }
 
-  // Empty state
+  if (error) {
+    return (
+      <p className="text-center text-red-400 py-12 text-sm">看板加载失败: {error}</p>
+    );
+  }
+
   if (!data?.columns?.length) {
     return (
-      <p className="text-center text-gray-400 py-12">无法加载看板数据</p>
+      <p className="text-center text-gray-400 py-12 text-sm">无法加载看板数据</p>
     );
   }
 

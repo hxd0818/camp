@@ -34,6 +34,12 @@ from app.schemas.dashboard import (
     BrandTierBucketSchema,
     ExpiringContractsResponse,
     ExpiringContractItem,
+    ToolUnitsResponse,
+    ToolUnitRow,
+    ToolBrandsResponse,
+    ToolBrandRow,
+    FloorSummaryResponse,
+    FloorSummaryRow,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -384,10 +390,10 @@ async def get_vacancy_analysis(
     rows = result.all()
 
     buckets_data = [
-        {"name": "短期空置(#22c55e)", "color": "#22c55e", "count": 0, "area": 0.0},
-        {"name": "中期空置(#f59e0b)", "color": "#f59e0b", "count": 0, "area": 0.0},
-        {"name": "长期空置(#f97316)", "color": "#f97316", "count": 0, "area": 0.0},
-        {"name": "超长期空置(#ef4444)", "color": "#ef4444", "count": 0, "area": 0.0},
+        {"name": "短期空置", "color": "#22c55e", "count": 0, "area": 0.0},
+        {"name": "中期空置", "color": "#f59e0b", "count": 0, "area": 0.0},
+        {"name": "长期空置", "color": "#f97316", "count": 0, "area": 0.0},
+        {"name": "超长期空置", "color": "#ef4444", "count": 0, "area": 0.0},
     ]
 
     for vd, area in rows:
@@ -612,3 +618,224 @@ async def get_expiring_contracts(
     total = count_result.scalar() or 0
 
     return ExpiringContractsResponse(items=items, total=total)
+
+
+# ---------------------------------------------------------------------------
+# 8. GET /dashboard/tools/units?mall_id=&building_id=&floor_id=&status=
+# ---------------------------------------------------------------------------
+
+
+@router.get("/tools/units", response_model=ToolUnitsResponse)
+async def query_units_tool(
+    mall_id: int = Query(..., description="Mall ID"),
+    building_id: int | None = Query(None),
+    floor_id: int | None = Query(None),
+    status: str | None = Query(None),
+    area_min: float | None = Query(None),
+    area_max: float | None = Query(None),
+    rent_min: float | None = Query(None),
+    rent_max: float | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rich unit query with building/floor/tenant joins for the units tool page."""
+    await _validate_mall(db, mall_id)
+
+    # Determine floor scope
+    if floor_id is not None:
+        floor_filter = Unit.floor_id == floor_id
+    elif building_id is not None:
+        floor_filter = Unit.floor_id.in_(select(Floor.id).where(Floor.building_id == building_id))
+    else:
+        floor_filter = Unit.floor_id.in_(
+            select(Floor.id)
+            .join(Building, Floor.building_id == Building.id)
+            .where(Building.mall_id == mall_id)
+        )
+
+    base_conditions = [floor_filter]
+    if status is not None and status in VALID_STATUSES:
+        base_conditions.append(Unit.status == status)
+
+    stmt = (
+        select(
+            Unit,
+            Floor.floor_number,
+            Floor.name.label("floor_name"),
+            Building.id.label("bid"),
+            Building.name.label("building_name"),
+            Tenant.name.label("tenant_name"),
+            Contract.monthly_rent.label("monthly_rent"),
+        )
+        .join(Floor, Unit.floor_id == Floor.id)
+        .join(Building, Floor.building_id == Building.id)
+        .outerjoin(
+            Contract,
+            and_(Unit.id == Contract.unit_id, Contract.status == "active"),
+        )
+        .outerjoin(Tenant, Contract.tenant_id_ref == Tenant.id)
+        .where(and_(*base_conditions))
+        .order_by(Building.name, Floor.floor_number, Unit.code)
+    )
+
+    # Apply area filters
+    if area_min is not None:
+        stmt = stmt.where(Unit.gross_area >= area_min)
+    if area_max is not None:
+        stmt = stmt.where(Unit.gross_area <= area_max)
+    if rent_min is not None:
+        stmt = stmt.where(Contract.monthly_rent >= rent_min)
+    if rent_max is not None:
+        stmt = stmt.where(Contract.monthly_rent <= rent_max)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    items = [
+        ToolUnitRow(
+            id=row[0].id,
+            unit_code=row[0].code,
+            floor_id=row[0].floor_id,
+            floor_number=int(row[1] or 0),
+            floor_name=row[2] or "",
+            building_id=int(row[3] or 0),
+            building_name=row[4] or "",
+            area=float(row[0].gross_area or 0),
+            layout_type=row[0].layout_type.value if row[0].layout_type else "",
+            status=row[0].status.value,
+            tenant_name=row[5],
+            monthly_rent=float(row[6]) if row[6] else None,
+            mall_id=mall_id,
+        )
+        for row in rows
+    ]
+
+    # Total count (without limit for now - all results returned)
+    return ToolUnitsResponse(data=items, total=len(items))
+
+
+# ---------------------------------------------------------------------------
+# 9. GET /dashboard/tools/brands?search=&tier=&status=&skip=&limit=
+# ---------------------------------------------------------------------------
+
+
+@router.get("/tools/brands", response_model=ToolBrandsResponse)
+async def query_brands_tool(
+    mall_id: int = Query(..., description="Mall ID"),
+    search: str = Query("", description="Search tenant name"),
+    tier: str = Query("", description="Filter by brand tier"),
+    status: str = Query("", description="Filter by tenant status"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(15, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Brand/tenant query with tier and contract aggregation."""
+    from app.models.tenant import BrandTier
+
+    await _validate_mall(db, mall_id)
+    floor_ids = await _get_mall_floor_ids(db, mall_id)
+
+    if not floor_ids:
+        return ToolBrandsResponse(data=[], total=0)
+
+    # Base subquery: tenants with active contracts in this mall
+    tenant_subq = (
+        select(Contract.tenant_id_ref.distinct().label("tid"))
+        .join(Unit, Contract.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), Contract.status == "active")
+    ).subquery()
+
+    # Build conditions
+    conds = []
+    if search:
+        conds.append(Tenant.name.ilike(f"%{search}%"))
+    if tier:
+        try:
+            conds.append(Tenant.brand_tier == BrandTier(tier))
+        except ValueError:
+            pass  # Invalid tier, ignore filter
+    if status:
+        conds.append(Tenant.status == status)
+
+    # Count query
+    count_stmt = select(func.count()).select_from(Tenant).join(tenant_subq, Tenant.id == tenant_subq.c.tid)
+    if conds:
+        count_stmt = count_stmt.where(and_(*conds))
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    # Data query with contract aggregations
+    data_stmt = (
+        select(
+            Tenant.id,
+            Tenant.name,
+            Tenant.brand_tier,
+            Tenant.type,
+            Tenant.status,
+            func.count(Contract.id).label("contract_count"),
+            func.coalesce(func.sum(Unit.gross_area), 0).label("total_area"),
+            func.coalesce(func.sum(Contract.monthly_rent.cast(Float)), 0).label("total_rent"),
+        )
+        .outerjoin(Contract, Contract.tenant_id_ref == Tenant.id)
+        .outerjoin(Unit, and_(Contract.unit_id == Unit.id, Unit.floor_id.in_(floor_ids)))
+        .join(tenant_subq, Tenant.id == tenant_subq.c.tid)
+        .where(and_(*conds) if conds else True)
+        .group_by(Tenant.id, Tenant.name, Tenant.brand_tier, Tenant.type, Tenant.status)
+        .order_by(Tenant.name)
+        .offset(skip)
+        .limit(limit)
+    )
+    rows = (await db.execute(data_stmt)).all()
+
+    items = [
+        ToolBrandRow(
+            id=r[0],
+            tenant_name=r[1],
+            brand_tier=r[2].value if r[2] else None,
+            type=r[3] or "",
+            contract_count=int(r[5] or 0),
+            total_area=float(r[6] or 0),
+            monthly_rent=float(r[7] or 0),
+            status=r[4].value if hasattr(r[4], "value") else str(r[4] or ""),
+        )
+        for r in rows
+    ]
+
+    return ToolBrandsResponse(data=items, total=total)
+
+
+# ---------------------------------------------------------------------------
+# 10. GET /dashboard/floor-summary?mall_id=
+# ---------------------------------------------------------------------------
+
+
+@router.get("/floor-summary", response_model=FloorSummaryResponse)
+async def get_floor_summary(
+    mall_id: int = Query(..., description="Mall ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-floor occupied/vacant unit counts for project overview page."""
+    await _validate_mall(db, mall_id)
+
+    result = await db.execute(
+        select(
+            Floor.name.label("floor_name"),
+            func.sum(case((Unit.status == "occupied", 1), else_=0)).label("occupied"),
+            func.sum(case((Unit.status == "vacant", 1), else_=0)).label("vacant"),
+        )
+        .join(Building, Floor.building_id == Building.id)
+        .outerjoin(Unit, Unit.floor_id == Floor.id)
+        .where(Building.mall_id == mall_id)
+        .group_by(Floor.id, Floor.name)
+        .order_by(Floor.sort_order, Floor.floor_number)
+    )
+    rows = result.all()
+
+    floors = [
+        FloorSummaryRow(
+            floor_name=r[0] or "-",
+            occupied=int(r[1] or 0),
+            vacant=int(r[2] or 0),
+        )
+        for r in rows
+    ]
+
+    return FloorSummaryResponse(floors=floors)

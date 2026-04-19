@@ -123,3 +123,53 @@ class ExpiringContractItem(BaseModel):
 class ExpiringContractsResponse(BaseModel):
     items: list[ExpiringContractItem]
     total: int
+
+
+# --- Tool Query Schemas ---
+
+
+class ToolUnitRow(BaseModel):
+    id: int
+    unit_code: str
+    floor_id: int
+    floor_number: int = 0
+    floor_name: str = ""
+    building_id: int = 0
+    building_name: str = ""
+    area: float = 0.0
+    layout_type: str = ""
+    status: str = ""
+    tenant_name: str | None = None
+    monthly_rent: float | None = None
+    mall_id: int = 0
+
+
+class ToolUnitsResponse(BaseModel):
+    data: list[ToolUnitRow] = Field(default_factory=list)
+    total: int = 0
+
+
+class ToolBrandRow(BaseModel):
+    id: int
+    tenant_name: str
+    brand_tier: str | None = None
+    type: str = ""
+    contract_count: int = 0
+    total_area: float = 0.0
+    monthly_rent: float = 0.0
+    status: str = ""
+
+
+class ToolBrandsResponse(BaseModel):
+    data: list[ToolBrandRow] = Field(default_factory=list)
+    total: int = 0
+
+
+class FloorSummaryRow(BaseModel):
+    floor_name: str = ""
+    occupied: int = 0
+    vacant: int = 0
+
+
+class FloorSummaryResponse(BaseModel):
+    floors: list[FloorSummaryRow] = Field(default_factory=list)
