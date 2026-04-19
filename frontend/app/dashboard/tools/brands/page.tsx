@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { dashboardApi } from '@/lib/dashboard-api';
 
 interface BrandRow {
   id: number;
@@ -11,6 +12,12 @@ interface BrandRow {
   total_area: number;
   monthly_rent: number;
   status: string;
+  // 经营数据
+  avg_daily_traffic: number | null;
+  avg_daily_sales: number | null;
+  avg_monthly_sales_per_sqm: number | null;
+  avg_rent_to_sales_ratio: number | null;
+  annual_rent_income: number | null;
 }
 
 const TIER_OPTIONS = [
@@ -33,7 +40,7 @@ const TIER_BADGE: Record<string, string> = {
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   active: { label: '在营', cls: 'text-green-600' },
   inactive: { label: '停业', cls: 'text-gray-400' },
-  pending: { label: '待开业', cls: 'text-yellow-600' },
+  prospect: { label: '待开业', cls: 'text-yellow-600' },
 };
 
 const PAGE_SIZE = 15;
@@ -46,27 +53,22 @@ export default function BrandsQueryPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [skip, setSkip] = useState(0);
   const [total, setTotal] = useState(0);
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/dashboard/tools/brands?` +
-        new URLSearchParams({
-          mall_id: '1',
-          search,
-          tier: tierFilter !== 'all' ? tierFilter : '',
-          status: statusFilter,
-          skip: String(skip),
-          limit: String(PAGE_SIZE),
-        });
-
-      const brandRes: any = await fetch(apiUrl).then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-        return r.json();
+      const res = await dashboardApi.getBrandsTool(1, {
+        search,
+        tier: tierFilter !== 'all' ? tierFilter : '',
+        status: statusFilter,
+        skip,
+        limit: PAGE_SIZE,
       });
 
-      const items: BrandRow[] = brandRes.data ?? brandRes ?? [];
-      const count: number = brandRes.total ?? items.length;
+      const items: BrandRow[] = res.data ?? res ?? [];
+      const count: number = res.total ?? items.length;
       setData(items);
       setTotal(count);
     } catch (err) {
@@ -84,11 +86,38 @@ export default function BrandsQueryPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.floor(skip / PAGE_SIZE) + 1;
 
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectedBrands = data.filter(b => selectedIds.has(b.id));
+
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-4">
+    <div className="max-w-full mx-auto p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">品牌查询</h2>
+        <button
+          onClick={() => {
+            setCompareMode(!compareMode);
+            setSelectedIds(new Set());
+          }}
+          className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+            compareMode
+              ? 'bg-camp-600 text-white border-camp-600'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          {compareMode ? '退出对比' : '多品牌对比'}
+        </button>
       </div>
 
       {/* Search & Filters */}
@@ -129,10 +158,103 @@ export default function BrandsQueryPage() {
             <option value="">全部状态</option>
             <option value="active">在营</option>
             <option value="inactive">停业</option>
-            <option value="pending">待开业</option>
+            <option value="prospect">待开业</option>
           </select>
         </div>
       </div>
+
+      {/* Comparison View */}
+      {compareMode && selectedBrands.length > 0 && (
+        <div className="bg-white rounded-lg border p-4">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">
+            已选择 {selectedBrands.length} 个品牌进行对比
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">指标</th>
+                  {selectedBrands.map(b => (
+                    <th key={b.id} className="px-3 py-2 text-center text-xs font-medium text-gray-500">
+                      {b.tenant_name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">品牌能级</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center">
+                      {b.brand_tier ? (
+                        <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
+                          TIER_BADGE[b.brand_tier] || 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {b.brand_tier.toUpperCase()}
+                        </span>
+                      ) : '-'}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">合同数</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">{b.contract_count}</td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">总面积 (m²)</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
+                      {b.total_area > 0 ? b.total_area.toLocaleString() : '-'}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">日均客流</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
+                      {b.avg_daily_traffic ? Math.round(b.avg_daily_traffic).toLocaleString() : '-'}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">日均销售 (¥)</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
+                      {b.avg_daily_sales ? Math.round(b.avg_daily_sales).toLocaleString() : '-'}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">月均坪效 (¥/m²)</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
+                      {b.avg_monthly_sales_per_sqm ? Math.round(b.avg_monthly_sales_per_sqm).toLocaleString() : '-'}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">租售比 (%)</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
+                      {b.avg_rent_to_sales_ratio ? b.avg_rent_to_sales_ratio.toFixed(1) : '-'}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-gray-600">年租金收入 (¥)</td>
+                  {selectedBrands.map(b => (
+                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
+                      {b.annual_rent_income ? b.annual_rent_income.toLocaleString() : '-'}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-lg border overflow-hidden">
@@ -146,6 +268,22 @@ export default function BrandsQueryPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
+                    {compareMode && (
+                      <th className="px-2 py-2.5 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size === data.length && data.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedIds(new Set(data.map(d => d.id)));
+                            } else {
+                              setSelectedIds(new Set());
+                            }
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                      </th>
+                    )}
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
                       名称
                     </th>
@@ -153,22 +291,28 @@ export default function BrandsQueryPage() {
                       能级
                     </th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                      类型
-                    </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
                       合同数
                     </th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
-                      总面积 (m&sup2;)
+                      总面积 (m²)
                     </th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
                       月租金 (¥)
                     </th>
-                    <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500">
-                      状态
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+                      日均客流
+                    </th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+                      月均坪效
+                    </th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+                      租售比
+                    </th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+                      年租金 (¥)
                     </th>
                     <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500">
-                      操作
+                      状态
                     </th>
                   </tr>
                 </thead>
@@ -178,8 +322,22 @@ export default function BrandsQueryPage() {
                       label: row.status,
                       cls: 'text-gray-500',
                     };
+                    const isSelected = selectedIds.has(row.id);
                     return (
-                      <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                      <tr
+                        key={row.id}
+                        className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-camp-50' : ''}`}
+                      >
+                        {compareMode && (
+                          <td className="px-2 py-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(row.id)}
+                              className="rounded border-gray-300"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-2.5 font-medium text-gray-900">
                           {row.tenant_name}
                         </td>
@@ -196,27 +354,27 @@ export default function BrandsQueryPage() {
                             <span className="text-gray-300 text-xs">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-600">{row.type || '-'}</td>
+                        <td className="px-4 py-2.5 text-gray-600">{row.contract_count}</td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
-                          {row.contract_count}
+                          {row.total_area > 0 ? row.total_area.toLocaleString() : '-'}
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
-                          {row.total_area > 0
-                            ? row.total_area.toLocaleString()
-                            : '-'}
+                          {row.monthly_rent > 0 ? row.monthly_rent.toLocaleString() : '-'}
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
-                          {row.monthly_rent > 0
-                            ? row.monthly_rent.toLocaleString()
-                            : '-'}
+                          {row.avg_daily_traffic ? Math.round(row.avg_daily_traffic).toLocaleString() : '-'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">
+                          {row.avg_monthly_sales_per_sqm ? Math.round(row.avg_monthly_sales_per_sqm).toLocaleString() : '-'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">
+                          {row.avg_rent_to_sales_ratio ? `${row.avg_rent_to_sales_ratio.toFixed(1)}%` : '-'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">
+                          {row.annual_rent_income ? row.annual_rent_income.toLocaleString() : '-'}
                         </td>
                         <td className={`px-4 py-2.5 text-center ${st.cls}`}>
                           {st.label}
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <button className="text-camp-600 hover:text-camp-700 text-xs font-medium">
-                            详情
-                          </button>
                         </td>
                       </tr>
                     );
@@ -225,7 +383,6 @@ export default function BrandsQueryPage() {
               </table>
             </div>
 
-            {/* Pagination */}
             <PaginationBar
               currentPage={currentPage}
               totalPages={totalPages}
@@ -251,7 +408,6 @@ function LoadingSkeleton() {
           <div className="h-4 bg-gray-200 rounded w-20" />
           <div className="h-4 bg-gray-200 rounded w-24" />
           <div className="h-4 bg-gray-200 rounded w-12" />
-          <div className="h-4 bg-gray-200 rounded w-10" />
         </div>
       ))}
     </div>

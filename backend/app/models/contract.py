@@ -62,6 +62,12 @@ class Contract(Base):
     signed_area: Mapped[float | None] = mapped_column(nullable=True)
     unit_code_at_signing: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Renewal flag: True = renewal contract, False = new signing
+    is_renewal: Mapped[bool] = mapped_column(
+        Boolean, default=False,
+        comment="Whether this contract is a renewal of an existing lease"
+    )
+
     # AI Import metadata
     ai_imported: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_confidence_score: Mapped[float | None] = mapped_column(nullable=True)  # 0.0 - 1.0

@@ -47,6 +47,10 @@ class LeasingPlan(Base):
     due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True,
+        comment="Actual completion date (differs from due_date for early/late analysis)"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
