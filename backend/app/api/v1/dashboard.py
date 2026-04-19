@@ -273,6 +273,7 @@ async def get_dashboard_stats(
     # C. Expiring-Vacant Analysis (KPI #5)
     #   Units whose contract expired in last 30 days AND currently vacant.
     #   Value reported in 10k sqm (wan m2) per PPT requirement.
+    #   Uses 'expired' contract status since expired contracts caused vacancy.
     # ===================================================================
     eva_result = await db.execute(
         select(func.coalesce(func.sum(Unit.gross_area), 0))
@@ -282,7 +283,7 @@ async def get_dashboard_stats(
             Unit.status == "vacant",
             Contract.lease_end >= today - timedelta(days=30),
             Contract.lease_end <= today,
-            Contract.status == "active",
+            Contract.status.in_(["expired", "terminated"]),
         )
     )
     eva = float(eva_result.scalar() or 0)
@@ -296,13 +297,13 @@ async def get_dashboard_stats(
             Unit.status == "vacant",
             Contract.lease_end >= today - timedelta(days=60),
             Contract.lease_end < today - timedelta(days=30),
-            Contract.status == "active",
+            Contract.status.in_(["expired", "terminated"]),
         )
     )
     prev_eva = float(prev_eva_result.scalar() or 0)
     eva_mom = _calc_mom(eva, prev_eva)
 
-    # Total expired area (for ratio denominator)
+    # Total expired area (for ratio denominator) - all contracts expired in window
     eta_result = await db.execute(
         select(func.coalesce(func.sum(Unit.gross_area), 0))
         .join(Contract, Contract.unit_id == Unit.id)
@@ -310,7 +311,7 @@ async def get_dashboard_stats(
             Unit.floor_id.in_(floor_ids),
             Contract.lease_end >= today - timedelta(days=30),
             Contract.lease_end <= today,
-            Contract.status == "active",
+            Contract.status.in_(["expired", "terminated", "active"]),
         )
     )
     eta = float(eta_result.scalar() or 0)
@@ -334,46 +335,38 @@ async def get_dashboard_stats(
 
     # ===================================================================
     # D. Warning-Vacant Analysis (KPI #6)
-    #   Units with contracts expiring in 31-90 days AND currently vacant.
+    #   Units vacant for >= 90 days (long-term vacancy warning).
     #   Value reported in 10k sqm per PPT requirement.
     # ===================================================================
     wva_result = await db.execute(
         select(func.coalesce(func.sum(Unit.gross_area), 0))
-        .join(Contract, Contract.unit_id == Unit.id)
         .where(
             Unit.floor_id.in_(floor_ids),
             Unit.status == "vacant",
-            Contract.lease_end > today_plus_30,
-            Contract.lease_end <= today_plus_90,
-            Contract.status == "active",
+            Unit.vacancy_days >= 90,
         )
     )
     wva = float(wva_result.scalar() or 0)
 
-    # Previous period for MoM
+    # Previous period for MoM: compare with snapshot from 30 days ago
+    # Use units with vacancy_days >= 60 as proxy for previous period baseline
     prev_wva_result = await db.execute(
         select(func.coalesce(func.sum(Unit.gross_area), 0))
-        .join(Contract, Contract.unit_id == Unit.id)
         .where(
             Unit.floor_id.in_(floor_ids),
             Unit.status == "vacant",
-            Contract.lease_end > today_plus_30 - timedelta(days=30),
-            Contract.lease_end <= today_plus_90 - timedelta(days=30),
-            Contract.status == "active",
+            Unit.vacancy_days >= 120,
         )
     )
     prev_wva = float(prev_wva_result.scalar() or 0)
     wva_mom = _calc_mom(wva, prev_wva)
 
-    # Total warning area (for ratio denominator)
+    # Total vacant area (for ratio denominator)
     wta_result = await db.execute(
         select(func.coalesce(func.sum(Unit.gross_area), 0))
-        .join(Contract, Contract.unit_id == Unit.id)
         .where(
             Unit.floor_id.in_(floor_ids),
-            Contract.lease_end > today_plus_30,
-            Contract.lease_end <= today_plus_90,
-            Contract.status == "active",
+            Unit.status == "vacant",
         )
     )
     wta = float(wta_result.scalar() or 0)
