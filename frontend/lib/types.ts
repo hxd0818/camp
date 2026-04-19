@@ -228,20 +228,28 @@ export interface KPIMetric {
 }
 
 export interface DashboardKPIs {
-  occupancy_rate: KPIMetric;
+  // Core business metrics (Row 1)
+  dynamic_occupancy_rate: KPIMetric;
+  static_occupancy_rate: KPIMetric;
   vacant_area: KPIMetric;
-  monthly_revenue: KPIMetric;
-  expiring_count: KPIMetric;
-  leasing_completion: KPIMetric;
-  lianfa_ratio: KPIMetric;
-  // Additional KPIs
-  total_area: KPIMetric;
-  leased_area: KPIMetric;
-  total_units: KPIMetric;
-  occupied_units: KPIMetric;
-  vacant_units: KPIMetric;
-  total_tenants: KPIMetric;
-  avg_rent_per_sqm: KPIMetric;
+  new_vacant_area: KPIMetric;
+  vacant_area_ratio: KPIMetric;
+  lianfa_brand_ratio: KPIMetric;
+  // Process control metrics (Row 2)
+  lease_adjustment_rate: KPIMetric;
+  cumulative_adjustment_rate: KPIMetric;
+  expiring_vacant_count: KPIMetric;
+  expiring_vacant_ratio: KPIMetric;
+  warning_vacant_count: KPIMetric;
+  warning_vacant_ratio: KPIMetric;
+  leasing_completion_rate: KPIMetric;
+  leasing_early_completion_rate: KPIMetric;
+  expiring_completion_rate: KPIMetric;
+  warning_completion_rate: KPIMetric;
+  vacancy_removal_rate: KPIMetric;
+  lianfa_total_area: KPIMetric;
+  lianfa_area_ratio: KPIMetric;
+  new_lianfa_area: KPIMetric;
 }
 
 export interface DashboardStats {
@@ -352,34 +360,34 @@ export interface ExpiringContractItem {
 
 // --- Signing Structure Types ---
 
-export interface SigningStructureItem {
+export interface SigningStructureBucket {
   type: 'new' | 'renewal' | 'transfer';
-  count: number;
+  name: string;
   area: number;
-  percentage: number;
-  color: string;
+  count: number;
+  ratio: number; // percentage
+  color?: string;
 }
 
 export interface SigningStructureResponse {
-  items: SigningStructureItem[];
-  total_count: number;
+  buckets: SigningStructureBucket[];
   total_area: number;
-  change_percentage: number | null; // Month-over-month change
+  total_count: number;
 }
 
 // --- Brand Trend Types ---
 
 export interface BrandTrendItem {
   tier: string;
-  count: number;
-  new_this_month: number;
-  change_percentage: number;
+  tier_name: string;
+  new_count: number;
+  month_on_month: number | null;
+  color: string;
 }
 
 export interface BrandTrendResponse {
   items: BrandTrendItem[];
-  total_brands: number;
-  total_new_this_month: number;
+  period: string;
 }
 
 // --- Enhanced KPI with Subtitle ---

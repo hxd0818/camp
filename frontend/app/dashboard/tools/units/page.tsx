@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { dashboardApi } from '@/lib/dashboard-api';
+import { apiClient } from '@/lib/api';
 import type { Building, Floor } from '@/lib/types';
 
 interface UnitRow {
@@ -26,16 +27,16 @@ interface UnitRow {
 }
 
 const STATUS_TAG: Record<string, string> = {
-  vacant: 'bg-yellow-100 text-yellow-700',
+  vacant: 'bg-red-100 text-red-700',
   occupied: 'bg-green-100 text-green-700',
-  reserved: 'bg-blue-100 text-blue-700',
+  reserved: 'bg-purple-100 text-purple-700',
   maintenance: 'bg-orange-100 text-orange-700',
   blocked: 'bg-gray-100 text-gray-500',
 };
 
 const STATUS_LABEL: Record<string, string> = {
   vacant: '空置',
-  occupied: '已租',
+  occupied: '在营',
   reserved: '预留',
   maintenance: '维保中',
   blocked: '封存',
@@ -50,15 +51,21 @@ const LAYOUT_LABEL: Record<string, string> = {
   other: '其他',
 };
 
+const LEASING_TYPE_LABEL: Record<string, string> = {
+  new: '新招',
+  renewal: '续签',
+  adjustment: '调整',
+};
+
 const LEASING_TYPE_OPTIONS = [
-  { value: '', label: '全部类型' },
-  { value: 'new', label: '新签' },
+  { value: '', label: '全部招商类型' },
+  { value: 'new', label: '新招' },
   { value: 'renewal', label: '续签' },
   { value: 'adjustment', label: '调整' },
 ];
 
 const LAYOUT_TYPE_OPTIONS = [
-  { value: '', label: '全部业态' },
+  { value: '', label: '全部铺位类型' },
   { value: 'retail', label: '零售' },
   { value: 'kiosk', label: '专柜' },
   { value: 'food_court', label: '餐饮' },
@@ -137,15 +144,19 @@ export default function UnitsQueryPage() {
     <div className="max-w-full mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">铺位查询</h2>
+        {!loading && data.length > 0 && (
+          <span className="text-xs text-gray-400">共 {data.length} 条</span>
+        )}
       </div>
 
-      {/* Filters */}
+      {/* Filters - Compact flex layout */}
       <div className="bg-white rounded-lg border p-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Row 1: Dropdowns */}
           <select
             value={buildingId}
             onChange={(e) => setBuildingId(Number(e.target.value))}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white"
+            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white min-w-[120px]"
           >
             <option value={0}>全部楼宇</option>
             {buildings.map((b) => (
@@ -159,7 +170,7 @@ export default function UnitsQueryPage() {
             value={floorId}
             onChange={(e) => setFloorId(Number(e.target.value))}
             disabled={!buildingId}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white disabled:bg-gray-100"
+            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white disabled:bg-gray-100 min-w-[120px]"
           >
             <option value={0}>全部楼层</option>
             {floors.map((f) => (
@@ -172,11 +183,11 @@ export default function UnitsQueryPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white"
+            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white min-w-[100px]"
           >
             <option value="">全部状态</option>
             <option value="vacant">空置</option>
-            <option value="occupied">已租</option>
+            <option value="occupied">在营</option>
             <option value="reserved">预留</option>
             <option value="maintenance">维保中</option>
             <option value="blocked">封存</option>
@@ -185,7 +196,7 @@ export default function UnitsQueryPage() {
           <select
             value={leasingType}
             onChange={(e) => setLeasingType(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white"
+            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white min-w-[110px]"
           >
             {LEASING_TYPE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -197,7 +208,7 @@ export default function UnitsQueryPage() {
           <select
             value={layoutType}
             onChange={(e) => setLayoutType(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white"
+            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none bg-white min-w-[110px]"
           >
             {LAYOUT_TYPE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -206,37 +217,46 @@ export default function UnitsQueryPage() {
             ))}
           </select>
 
-          <input
-            type="number"
-            placeholder="面积最小 (m²)"
-            value={areaMin}
-            onChange={(e) => setAreaMin(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none"
-          />
+          {/* Separator */}
+          <div className="w-px h-8 bg-gray-200 hidden sm:block" />
 
-          <input
-            type="number"
-            placeholder="面积最大 (m²)"
-            value={areaMax}
-            onChange={(e) => setAreaMax(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none"
-          />
+          {/* Area range */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              placeholder="面积最小(m²)"
+              value={areaMin}
+              onChange={(e) => setAreaMin(e.target.value)}
+              className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none w-[110px]"
+            />
+            <span className="text-gray-400 text-xs">-</span>
+            <input
+              type="number"
+              placeholder="面积最大(m²)"
+              value={areaMax}
+              onChange={(e) => setAreaMax(e.target.value)}
+              className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none w-[110px]"
+            />
+          </div>
 
-          <input
-            type="number"
-            placeholder="月租最小 (¥)"
-            value={rentMin}
-            onChange={(e) => setRentMin(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none"
-          />
-
-          <input
-            type="number"
-            placeholder="月租最大 (¥)"
-            value={rentMax}
-            onChange={(e) => setRentMax(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none"
-          />
+          {/* Rent range */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              placeholder="月租最小(¥/m²)"
+              value={rentMin}
+              onChange={(e) => setRentMin(e.target.value)}
+              className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none w-[120px]"
+            />
+            <span className="text-gray-400 text-xs">-</span>
+            <input
+              type="number"
+              placeholder="月租最大(¥/m²)"
+              value={rentMax}
+              onChange={(e) => setRentMax(e.target.value)}
+              className="px-3 py-1.5 text-sm border rounded-md focus:ring-2 focus:ring-camp-500 outline-none w-[120px]"
+            />
+          </div>
         </div>
       </div>
 
@@ -249,7 +269,7 @@ export default function UnitsQueryPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
                     铺位编号
@@ -258,7 +278,7 @@ export default function UnitsQueryPage() {
                     楼层
                   </th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                    业态
+                    铺位类型
                   </th>
                   <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
                     面积 (m²)
@@ -276,7 +296,7 @@ export default function UnitsQueryPage() {
                     招商类型
                   </th>
                   <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500">
-                    到期时间
+                    合同到期日
                   </th>
                   <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500">
                     空置天数
@@ -287,25 +307,28 @@ export default function UnitsQueryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {data.map((row) => {
+                {data.map((row, index) => {
                   const leaseEnd = row.lease_end ? new Date(row.lease_end) : null;
                   const isExpiringSoon = leaseEnd && (leaseEnd.getTime() - Date.now()) < 30 * 24 * 60 * 60 * 1000;
 
                   return (
-                    <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-2.5 font-mono font-medium text-gray-900">
+                    <tr
+                      key={row.id}
+                      className={`hover:bg-gray-50 transition-colors ${index % 2 === 1 ? 'bg-gray-50/40' : ''}`}
+                    >
+                      <td className="px-4 py-2.5 font-mono font-medium text-gray-900 whitespace-nowrap">
                         {row.unit_code}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">
+                      <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
                         {row.floor_name || `${row.floor_number}F`}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">
+                      <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
                         {LAYOUT_LABEL[row.layout_type] || row.layout_type || '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-right text-gray-600">
+                      <td className="px-4 py-2.5 text-right text-gray-600 whitespace-nowrap">
                         {row.area > 0 ? row.area.toLocaleString() : '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-center">
+                      <td className="px-4 py-2.5 text-center whitespace-nowrap">
                         <span
                           className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
                             STATUS_TAG[row.status] || 'bg-gray-100 text-gray-600'
@@ -314,30 +337,34 @@ export default function UnitsQueryPage() {
                           {STATUS_LABEL[row.status] || row.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">
+                      <td className="px-4 py-2.5 text-gray-600 max-w-[140px] truncate" title={row.tenant_name || ''}>
                         {row.tenant_name || '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-right text-gray-600">
+                      <td className="px-4 py-2.5 text-right text-gray-600 whitespace-nowrap">
                         {row.monthly_rent != null && row.monthly_rent > 0
                           ? row.monthly_rent.toLocaleString()
                           : '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">
-                        {row.leasing_type === 'new' ? '新签' :
-                         row.leasing_type === 'renewal' ? '续签' :
-                         row.leasing_type === 'adjustment' ? '调整' : '-'}
+                      <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
+                        {LEASING_TYPE_LABEL[row.leasing_type as keyof typeof LEASING_TYPE_LABEL] || '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-center">
+                      <td className="px-4 py-2.5 text-center whitespace-nowrap">
                         {leaseEnd ? (
                           <span className={isExpiringSoon ? 'text-orange-600 font-medium' : 'text-gray-600'}>
                             {leaseEnd.toLocaleDateString('zh-CN')}
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-center text-gray-600">
-                        {row.vacancy_days != null ? `${row.vacancy_days}天` : '-'}
+                      <td className="px-4 py-2.5 text-center text-gray-600 whitespace-nowrap">
+                        {row.vacancy_days != null && row.status === 'vacant' ? (
+                          <span className="text-red-600">{row.vacancy_days}天</span>
+                        ) : row.vacancy_days != null ? (
+                          `${row.vacancy_days}天`
+                        ) : (
+                          '-'
+                        )}
                       </td>
-                      <td className="px-4 py-2.5 text-center">
+                      <td className="px-4 py-2.5 text-center whitespace-nowrap">
                         <Link
                           href={`/malls/${row.mall_id}/floors/${row.floor_id}`}
                           className="text-camp-600 hover:text-camp-700 text-xs font-medium"

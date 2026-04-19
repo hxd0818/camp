@@ -1,28 +1,22 @@
 # CAMP 变更日志
 
-## [2026-04-19] v0.1.15 - 前端主驾驶舱增强
+## [2026-04-19] v0.1.15 - 前端主驾驶舱增强（重构版）
 
 ### 概述
-前端主驾驶舱从6个KPI扩展到13个KPI，新增签约结构图表，增强空置分析和品牌能级图表展示，支持月环比数据展示。
+前端主驾驶舱全面对齐后端DashboardKPIs（19字段），从单行13个紧凑KPI改为2行标准布局（第1行核心经营指标6个 + 第2行过程管控指标7个），图表区扩展为4列（新增签约结构饼图），签约结构组件改用引导线模式。
 
 ### 变更内容
-**KPI扩展：**
-- `frontend/components/dashboard/KPICard.tsx` - 支持subtitle显示占比、compact紧凑布局、增强环比箭头显示
-- `frontend/app/dashboard/page.tsx` - 从6个KPI扩展到13个KPI，使用紧凑布局展示
-- `frontend/tailwind.config.ts` - 新增grid-cols-13支持13列布局
-- `frontend/lib/types.ts` - DashboardKPIs扩展7个新KPI(total_area/leased_area/total_units/occupied_units/vacant_units/total_tenants/avg_rent_per_sqm)
+**类型定义同步（对齐后端Schema）：**
+- `frontend/lib/types.ts` - DashboardKPIs完全重写为19个字段（dynamic_occupancy_rate/static_occupancy_rate/vacant_area/new_vacant_area/vacant_area_ratio/lianfa_brand_ratio/lease_adjustment_rate/cumulative_adjustment_rate/expiring_vacant_count等）；SigningStructureResponse改为buckets字段（匹配后端SigningStructureBucket）；BrandTrendResponse改为items+period格式（匹配后端BrandTierTrendItem）
 
-**新增签约结构图表：**
-- `frontend/components/dashboard/SigningStructureChart.tsx` - 新签vs续签vs转让饼图，支持月环比显示
+**驾驶舱页面重构：**
+- `frontend/app/dashboard/page.tsx` - KPI区域从grid-cols-13单行紧凑布局改为2行标准布局（Row1: grid-cols-6核心经营指标 + Row2: grid-cols-7过程管控指标），每个KPI使用kpiVal/kpiChange安全访问函数；图表区从3列(grid-cols-3)扩展为4列(grid-cols-4)，加入SigningStructureChart；移除compact属性，恢复标准KPICard尺寸；所有13个KPI均使用subtitle显示辅助信息（占比、合作面积、提前完成率等）
 
-**图表增强：**
-- `frontend/components/dashboard/VacancyPieChart.tsx` - 支持changePercent参数显示空置面积月环比
-- `frontend/components/dashboard/BrandTierDonut.tsx` - 支持totalNewThisMonth和totalChangePercent参数，显示本月新增和环比
-- `frontend/components/dashboard/ChartWrapper.tsx` - 新增extra属性支持头部额外信息展示
+**签约结构组件重写：**
+- `frontend/components/dashboard/SigningStructureChart.tsx` - 从ResponsiveContainer+简单label模式改为与VacancyPieChart一致的固定尺寸PieChart+引导线(renderCustomLabel/renderCustomConnector)模式；颜色方案更新为新签=#0ea5e9(蓝)、续签=#22c55e(绿)；Props适配后端buckets数据结构（type/name/area/count/ratio）；底部增加图例和汇总信息行
 
-**API扩展：**
-- `frontend/lib/dashboard-api.ts` - 新增getSigningStructure、getBrandTrend API方法
-- `frontend/lib/types.ts` - 新增SigningStructureResponse、BrandTrendResponse、SigningStructureItem、BrandTrendItem类型
+**已有文件未修改：**
+- KPICard、VacancyPieChart、LeaseTermBarChart、BrandTierDonut、ChartWrapper、dashboard-api.ts 均保持不变
 
 ---
 

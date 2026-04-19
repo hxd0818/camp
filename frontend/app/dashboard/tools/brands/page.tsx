@@ -1,24 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { dashboardApi } from '@/lib/dashboard-api';
+import type { BrandWithMetrics } from '@/lib/types';
 
-interface BrandRow {
-  id: number;
-  tenant_name: string;
-  brand_tier: string | null;
-  type: string;
-  contract_count: number;
-  total_area: number;
-  monthly_rent: number;
-  status: string;
-  // 经营数据
-  avg_daily_traffic: number | null;
-  avg_daily_sales: number | null;
-  avg_monthly_sales_per_sqm: number | null;
-  avg_rent_to_sales_ratio: number | null;
-  annual_rent_income: number | null;
-}
+interface BrandRow extends BrandWithMetrics {}
 
 const TIER_OPTIONS = [
   { value: 'all', label: '全部能级' },
@@ -44,6 +30,44 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 };
 
 const PAGE_SIZE = 15;
+
+/** Compare numeric values across brands and return highlight class per index */
+function useCompareHighlight<T>(
+  brands: BrandRow[],
+  extractor: (b: BrandRow) => T | null | undefined
+): ('high' | 'low' | '')[] {
+  return useMemo(() => {
+    const values = brands.map(extractor);
+    const numericValues = values.map((v) =>
+      typeof v === 'number' ? v : NaN
+    );
+    const validNumbers = numericValues.filter((v) => !isNaN(v));
+
+    if (validNumbers.length < 2) {
+      return new Array(brands.length).fill('');
+    }
+
+    const maxVal = Math.max(...validNumbers);
+    const minVal = Math.min(...validNumbers);
+
+    if (maxVal === minVal) {
+      return new Array(brands.length).fill('');
+    }
+
+    return numericValues.map((v) => {
+      if (isNaN(v)) return '';
+      if (v === maxVal) return 'high';
+      if (v === minVal) return 'low';
+      return '';
+    });
+  }, [brands, extractor]);
+}
+
+const HIGHLIGHT_CLS: Record<string, string> = {
+  high: 'bg-green-50 text-green-700 font-semibold rounded px-1.5 py-0.5',
+  low: 'bg-red-50 text-red-600 rounded px-1.5 py-0.5',
+  '': '',
+};
 
 export default function BrandsQueryPage() {
   const [data, setData] = useState<BrandRow[]>([]);
@@ -99,6 +123,13 @@ export default function BrandsQueryPage() {
   };
 
   const selectedBrands = data.filter(b => selectedIds.has(b.id));
+
+  // Compare highlights
+  const trafficHL = useCompareHighlight(selectedBrands, b => b.avg_daily_traffic);
+  const salesHL = useCompareHighlight(selectedBrands, b => b.avg_daily_sales);
+  const efficiencyHL = useCompareHighlight(selectedBrands, b => b.avg_monthly_sales_per_sqm);
+  const ratioHL = useCompareHighlight(selectedBrands, b => b.avg_rent_to_sales_ratio);
+  const rentIncomeHL = useCompareHighlight(selectedBrands, b => b.annual_rent_income);
 
   return (
     <div className="max-w-full mx-auto p-4 space-y-4">
@@ -166,16 +197,21 @@ export default function BrandsQueryPage() {
       {/* Comparison View */}
       {compareMode && selectedBrands.length > 0 && (
         <div className="bg-white rounded-lg border p-4">
-          <h3 className="text-sm font-semibold text-gray-800 mb-3">
-            已选择 {selectedBrands.length} 个品牌进行对比
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-800">
+              已选择 {selectedBrands.length} 个品牌进行对比
+            </h3>
+            <span className="text-[11px] text-gray-400">
+              绿色=最高值 红色=最低值
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">指标</th>
                   {selectedBrands.map(b => (
-                    <th key={b.id} className="px-3 py-2 text-center text-xs font-medium text-gray-500">
+                    <th key={b.id} className="px-3 py-2 text-center text-xs font-medium text-gray-500 min-w-[100px]">
                       {b.tenant_name}
                     </th>
                   ))}
@@ -212,41 +248,41 @@ export default function BrandsQueryPage() {
                 </tr>
                 <tr>
                   <td className="px-3 py-2 text-gray-600">日均客流</td>
-                  {selectedBrands.map(b => (
-                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
-                      {b.avg_daily_traffic ? Math.round(b.avg_daily_traffic).toLocaleString() : '-'}
+                  {selectedBrands.map((b, idx) => (
+                    <td key={b.id} className={`px-3 py-2 text-center ${HIGHLIGHT_CLS[trafficHL[idx]]}`}>
+                      {b.avg_daily_traffic != null ? Math.round(b.avg_daily_traffic).toLocaleString() : '-'}
                     </td>
                   ))}
                 </tr>
                 <tr>
-                  <td className="px-3 py-2 text-gray-600">日均销售 (¥)</td>
-                  {selectedBrands.map(b => (
-                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
-                      {b.avg_daily_sales ? Math.round(b.avg_daily_sales).toLocaleString() : '-'}
+                  <td className="px-3 py-2 text-gray-600">日均销售额 (¥)</td>
+                  {selectedBrands.map((b, idx) => (
+                    <td key={b.id} className={`px-3 py-2 text-center ${HIGHLIGHT_CLS[salesHL[idx]]}`}>
+                      {b.avg_daily_sales != null ? Math.round(b.avg_daily_sales).toLocaleString() : '-'}
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <td className="px-3 py-2 text-gray-600">月均坪效 (¥/m²)</td>
-                  {selectedBrands.map(b => (
-                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
-                      {b.avg_monthly_sales_per_sqm ? Math.round(b.avg_monthly_sales_per_sqm).toLocaleString() : '-'}
+                  {selectedBrands.map((b, idx) => (
+                    <td key={b.id} className={`px-3 py-2 text-center ${HIGHLIGHT_CLS[efficiencyHL[idx]]}`}>
+                      {b.avg_monthly_sales_per_sqm != null ? Math.round(b.avg_monthly_sales_per_sqm).toLocaleString() : '-'}
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <td className="px-3 py-2 text-gray-600">租售比 (%)</td>
-                  {selectedBrands.map(b => (
-                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
-                      {b.avg_rent_to_sales_ratio ? b.avg_rent_to_sales_ratio.toFixed(1) : '-'}
+                  {selectedBrands.map((b, idx) => (
+                    <td key={b.id} className={`px-3 py-2 text-center ${HIGHLIGHT_CLS[ratioHL[idx]]}`}>
+                      {b.avg_rent_to_sales_ratio != null ? `${b.avg_rent_to_sales_ratio.toFixed(1)}%` : '-'}
                     </td>
                   ))}
                 </tr>
                 <tr>
-                  <td className="px-3 py-2 text-gray-600">年租金收入 (¥)</td>
-                  {selectedBrands.map(b => (
-                    <td key={b.id} className="px-3 py-2 text-center text-gray-800">
-                      {b.annual_rent_income ? b.annual_rent_income.toLocaleString() : '-'}
+                  <td className="px-3 py-2 text-gray-600">年租金收入 (万元)</td>
+                  {selectedBrands.map((b, idx) => (
+                    <td key={b.id} className={`px-3 py-2 text-center ${HIGHLIGHT_CLS[rentIncomeHL[idx]]}`}>
+                      {b.annual_rent_income != null ? `${(b.annual_rent_income / 10000).toFixed(1)}万` : '-'}
                     </td>
                   ))}
                 </tr>
@@ -285,13 +321,16 @@ export default function BrandsQueryPage() {
                       </th>
                     )}
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                      名称
+                      品牌名称
                     </th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
                       能级
                     </th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                      合同数
+                      类型
+                    </th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+                      合作铺位
                     </th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
                       总面积 (m²)
@@ -303,13 +342,16 @@ export default function BrandsQueryPage() {
                       日均客流
                     </th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
-                      月均坪效
+                      日均销售 (¥)
+                    </th>
+                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+                      月坪效 (¥/m²)
                     </th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
                       租售比
                     </th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
-                      年租金 (¥)
+                      年租金收入 (万元)
                     </th>
                     <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500">
                       状态
@@ -317,7 +359,7 @@ export default function BrandsQueryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {data.map((row) => {
+                  {data.map((row, index) => {
                     const st = STATUS_MAP[row.status] || {
                       label: row.status,
                       cls: 'text-gray-500',
@@ -326,7 +368,7 @@ export default function BrandsQueryPage() {
                     return (
                       <tr
                         key={row.id}
-                        className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-camp-50' : ''}`}
+                        className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-camp-50' : ''} ${index % 2 === 1 ? 'bg-gray-50/30' : ''}`}
                       >
                         {compareMode && (
                           <td className="px-2 py-2.5">
@@ -354,6 +396,7 @@ export default function BrandsQueryPage() {
                             <span className="text-gray-300 text-xs">-</span>
                           )}
                         </td>
+                        <td className="px-4 py-2.5 text-gray-600">{row.type || '-'}</td>
                         <td className="px-4 py-2.5 text-gray-600">{row.contract_count}</td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
                           {row.total_area > 0 ? row.total_area.toLocaleString() : '-'}
@@ -362,16 +405,19 @@ export default function BrandsQueryPage() {
                           {row.monthly_rent > 0 ? row.monthly_rent.toLocaleString() : '-'}
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
-                          {row.avg_daily_traffic ? Math.round(row.avg_daily_traffic).toLocaleString() : '-'}
+                          {row.avg_daily_traffic != null ? Math.round(row.avg_daily_traffic).toLocaleString() : '-'}
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
-                          {row.avg_monthly_sales_per_sqm ? Math.round(row.avg_monthly_sales_per_sqm).toLocaleString() : '-'}
+                          {row.avg_daily_sales != null ? Math.round(row.avg_daily_sales).toLocaleString() : '-'}
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
-                          {row.avg_rent_to_sales_ratio ? `${row.avg_rent_to_sales_ratio.toFixed(1)}%` : '-'}
+                          {row.avg_monthly_sales_per_sqm != null ? Math.round(row.avg_monthly_sales_per_sqm).toLocaleString() : '-'}
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-600">
-                          {row.annual_rent_income ? row.annual_rent_income.toLocaleString() : '-'}
+                          {row.avg_rent_to_sales_ratio != null ? `${row.avg_rent_to_sales_ratio.toFixed(1)}%` : '-'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">
+                          {row.annual_rent_income != null ? `${(row.annual_rent_income / 10000).toFixed(1)}` : '-'}
                         </td>
                         <td className={`px-4 py-2.5 text-center ${st.cls}`}>
                           {st.label}

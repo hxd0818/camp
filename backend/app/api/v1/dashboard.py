@@ -908,7 +908,7 @@ async def get_project_detail(
 
     operations = OperationsCard(
         annual_rent=round(monthly_rent * 12, 2),
-        rent_per_sqm=round(monthly_rent / float(ua.leased_area or 1), 2),
+        rent_per_sqm=round(float(monthly_rent) / float(ua.leased_area or 1), 2),
         daily_traffic=int(bd.total_traffic or 0),
         monthly_sales=float(bd.total_sales or 0),
         rent_to_sales_ratio=float(bd.avg_ratio or 0),
