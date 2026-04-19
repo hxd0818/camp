@@ -21,6 +21,7 @@ const BUCKET_COLORS: Record<string, string> = {
 interface Props {
   data: VacancyData[];
   loading?: boolean;
+  changePercent?: number | null; // Month-over-month change
 }
 
 const RADIAN = Math.PI / 180;
@@ -77,14 +78,25 @@ function renderCustomConnector({
   );
 }
 
-export default function VacancyPieChart({ data, loading }: Props) {
+export default function VacancyPieChart({ data, loading, changePercent }: Props) {
   const isEmpty = !data || data.length === 0 || data.every(d => d.value === 0);
 
   const displayData = data.filter(d => d.value > 0);
   const total = displayData.reduce((s, d) => s + d.value, 0);
 
   return (
-    <ChartWrapper title="空置结构" loading={loading} empty={isEmpty}>
+    <ChartWrapper
+      title="空置结构"
+      loading={loading}
+      empty={isEmpty}
+      extra={
+        changePercent !== null && changePercent !== undefined ? (
+          <div className={`text-sm font-medium ${changePercent >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+            {changePercent >= 0 ? '\u2191' : '\u2193'} {Math.abs(changePercent).toFixed(1)}% 环比
+          </div>
+        ) : null
+      }
+    >
       <div className="flex items-center justify-center w-full h-full overflow-visible">
         <PieChart width={340} height={260}>
           <Pie

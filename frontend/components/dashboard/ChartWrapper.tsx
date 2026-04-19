@@ -9,6 +9,7 @@ interface ChartWrapperProps {
   empty?: boolean;
   emptyText?: string;
   className?: string;
+  extra?: React.ReactNode; // Extra content in header (e.g., change percentage)
 }
 
 export default function ChartWrapper({
@@ -18,6 +19,7 @@ export default function ChartWrapper({
   empty = false,
   emptyText = '暂无数据',
   className = '',
+  extra,
 }: ChartWrapperProps) {
   if (loading) {
     return (
@@ -34,7 +36,10 @@ export default function ChartWrapper({
 
   return (
     <div className={`bg-white rounded-lg border p-4 h-96 flex flex-col ${className}`}>
-      <h3 className="text-sm font-medium text-gray-700 mb-2 shrink-0">{title}</h3>
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <h3 className="text-sm font-medium text-gray-700">{title}</h3>
+        {extra && <div>{extra}</div>}
+      </div>
       {empty ? (
         <div className="flex items-center justify-center flex-1 text-gray-300 text-sm">
           {emptyText}

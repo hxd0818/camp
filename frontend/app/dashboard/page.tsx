@@ -21,6 +21,10 @@ const BrandTierDonut = dynamic(
   () => import('@/components/dashboard/BrandTierDonut'),
   { ssr: false }
 );
+const SigningStructureChart = dynamic(
+  () => import('@/components/dashboard/SigningStructureChart'),
+  { ssr: false }
+);
 import type {
   DashboardStats,
   KanbanData,
@@ -29,6 +33,8 @@ import type {
   BrandTierBucketSchema,
   ExpiringContractItem,
   LeasingPlan,
+  SigningStructureResponse,
+  BrandTrendResponse,
 } from '@/lib/types';
 
 export default function DashboardPage() {
@@ -40,6 +46,8 @@ export default function DashboardPage() {
   const [vacancyBuckets, setVacancyBuckets] = useState<VacancyBucketSchema[]>([]);
   const [leaseTerms, setLeaseTerms] = useState<LeaseTermBucketSchema[]>([]);
   const [brandTiers, setBrandTiers] = useState<BrandTierBucketSchema[]>([]);
+  const [brandTrend, setBrandTrend] = useState<BrandTrendResponse | null>(null);
+  const [signingStructure, setSigningStructure] = useState<SigningStructureResponse | null>(null);
   const [expiringItems, setExpiringItems] = useState<ExpiringContractItem[]>([]);
   const [plans, setPlans] = useState<LeasingPlan[]>([]);
 
@@ -55,6 +63,8 @@ export default function DashboardPage() {
         vacancyRes,
         leaseRes,
         brandRes,
+        brandTrendRes,
+        signingRes,
         expiringRes,
         plansRes,
       ] = await Promise.allSettled([
@@ -63,6 +73,8 @@ export default function DashboardPage() {
         dashboardApi.getVacancy(mallId),
         dashboardApi.getLeaseTerm(mallId),
         dashboardApi.getBrandTier(mallId),
+        dashboardApi.getBrandTrend(mallId),
+        dashboardApi.getSigningStructure(mallId),
         dashboardApi.getExpiring(mallId, 30),
         dashboardApi.listPlans({ mall_id: mallId }),
       ]);
@@ -80,6 +92,12 @@ export default function DashboardPage() {
       if (brandRes.status === 'fulfilled') {
         const d = brandRes.value as any;
         setBrandTiers(d?.buckets || []);
+      }
+      if (brandTrendRes.status === 'fulfilled') {
+        setBrandTrend(brandTrendRes.value as unknown as BrandTrendResponse);
+      }
+      if (signingRes.status === 'fulfilled') {
+        setSigningStructure(signingRes.value as unknown as SigningStructureResponse);
       }
       if (expiringRes.status === 'fulfilled') {
         const d = expiringRes.value as any;
@@ -101,21 +119,22 @@ export default function DashboardPage() {
     <>
       <FilterBar currentMallId={mallId} onMallChange={setMallId} />
 
-      {/* KPI Cards */}
+      {/* KPI Cards - 13 KPIs in compact layout */}
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-          {[...Array(6)].map((_, i) => (
-            <KPICard key={i} title="" value="" loading />
+        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-13 gap-2 mb-6">
+          {[...Array(13)].map((_, i) => (
+            <KPICard key={i} title="" value="" loading compact />
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-13 gap-2 mb-6">
           <KPICard
             title="出租率"
             value={stats.kpis.occupancy_rate.value}
             unit="%"
             change={stats.kpis.occupancy_rate.change}
             color="text-green-600"
+            compact
           />
           <KPICard
             title="空置面积"
@@ -123,6 +142,7 @@ export default function DashboardPage() {
             unit="m²"
             change={stats.kpis.vacant_area.change}
             color="text-red-500"
+            compact
           />
           <KPICard
             title="月租收入"
@@ -130,12 +150,14 @@ export default function DashboardPage() {
             unit="万"
             change={stats.kpis.monthly_revenue.change}
             color="text-blue-600"
+            compact
           />
           <KPICard
             title="即到合同"
             value={stats.kpis.expiring_count.value}
             unit="个"
             color="text-orange-500"
+            compact
           />
           <KPICard
             title="招商完成"
@@ -143,6 +165,7 @@ export default function DashboardPage() {
             unit="%"
             change={stats.kpis.leasing_completion.change}
             color="text-purple-600"
+            compact
           />
           <KPICard
             title="联发品牌"
@@ -150,16 +173,88 @@ export default function DashboardPage() {
             unit="%"
             change={stats.kpis.lianfa_ratio.change}
             color="text-cyan-600"
+            compact
+          />
+          {/* Additional KPIs */}
+          <KPICard
+            title="总面积"
+            value={stats.kpis.total_area?.value || 0}
+            unit="m²"
+            color="text-gray-600"
+            compact
+          />
+          <KPICard
+            title="已租面积"
+            value={stats.kpis.leased_area?.value || 0}
+            unit="m²"
+            color="text-indigo-600"
+            compact
+          />
+          <KPICard
+            title="总铺位数"
+            value={stats.kpis.total_units?.value || 0}
+            unit="个"
+            color="text-slate-600"
+            compact
+          />
+          <KPICard
+            title="已租铺位"
+            value={stats.kpis.occupied_units?.value || 0}
+            unit="个"
+            color="text-emerald-600"
+            compact
+          />
+          <KPICard
+            title="空置铺位"
+            value={stats.kpis.vacant_units?.value || 0}
+            unit="个"
+            color="text-rose-500"
+            compact
+          />
+          <KPICard
+            title="品牌总数"
+            value={stats.kpis.total_tenants?.value || 0}
+            unit="家"
+            color="text-violet-600"
+            compact
+          />
+          <KPICard
+            title="平均租金"
+            value={stats.kpis.avg_rent_per_sqm?.value || 0}
+            unit="元/m²"
+            color="text-amber-600"
+            compact
           />
         </div>
       ) : null}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <VacancyPieChart data={vacancyBuckets} loading={loading} />
+        <VacancyPieChart
+          data={vacancyBuckets}
+          loading={loading}
+          changePercent={stats?.kpis.vacant_area.change}
+        />
         <LeaseTermBarChart data={leaseTerms} loading={loading} />
-        <BrandTierDonut data={brandTiers} loading={loading} />
+        <BrandTierDonut
+          data={brandTiers}
+          loading={loading}
+          totalNewThisMonth={brandTrend?.total_new_this_month}
+          totalChangePercent={brandTrend?.items.reduce((sum, item) => sum + (item.change_percentage || 0), 0) / (brandTrend?.items.length || 1)}
+        />
       </div>
+
+      {/* Signing Structure Chart - New Row */}
+      {signingStructure && (
+        <div className="grid grid-cols-1 gap-6 mb-6">
+          <SigningStructureChart
+            data={signingStructure.items}
+            totalArea={signingStructure.total_area}
+            changePercent={signingStructure.change_percentage}
+            loading={loading}
+          />
+        </div>
+      )}
 
       {/* Kanban Board */}
       <div className="mb-6">

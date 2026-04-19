@@ -30,6 +30,9 @@ const config: Config = {
           maintenance: '#6b7280', // gray
         },
       },
+      gridTemplateColumns: {
+        '13': 'repeat(13, minmax(0, 1fr))',
+      },
     },
   },
   plugins: [],

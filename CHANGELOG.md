@@ -1,5 +1,31 @@
 # CAMP 变更日志
 
+## [2026-04-19] v0.1.15 - 前端主驾驶舱增强
+
+### 概述
+前端主驾驶舱从6个KPI扩展到13个KPI，新增签约结构图表，增强空置分析和品牌能级图表展示，支持月环比数据展示。
+
+### 变更内容
+**KPI扩展：**
+- `frontend/components/dashboard/KPICard.tsx` - 支持subtitle显示占比、compact紧凑布局、增强环比箭头显示
+- `frontend/app/dashboard/page.tsx` - 从6个KPI扩展到13个KPI，使用紧凑布局展示
+- `frontend/tailwind.config.ts` - 新增grid-cols-13支持13列布局
+- `frontend/lib/types.ts` - DashboardKPIs扩展7个新KPI(total_area/leased_area/total_units/occupied_units/vacant_units/total_tenants/avg_rent_per_sqm)
+
+**新增签约结构图表：**
+- `frontend/components/dashboard/SigningStructureChart.tsx` - 新签vs续签vs转让饼图，支持月环比显示
+
+**图表增强：**
+- `frontend/components/dashboard/VacancyPieChart.tsx` - 支持changePercent参数显示空置面积月环比
+- `frontend/components/dashboard/BrandTierDonut.tsx` - 支持totalNewThisMonth和totalChangePercent参数，显示本月新增和环比
+- `frontend/components/dashboard/ChartWrapper.tsx` - 新增extra属性支持头部额外信息展示
+
+**API扩展：**
+- `frontend/lib/dashboard-api.ts` - 新增getSigningStructure、getBrandTrend API方法
+- `frontend/lib/types.ts` - 新增SigningStructureResponse、BrandTrendResponse、SigningStructureItem、BrandTrendItem类型
+
+---
+
 ## [2026-04-19] v0.1.14 - 招商业务驾驶舱
 
 ### 概述

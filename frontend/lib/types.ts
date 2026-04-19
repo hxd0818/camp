@@ -234,6 +234,14 @@ export interface DashboardKPIs {
   expiring_count: KPIMetric;
   leasing_completion: KPIMetric;
   lianfa_ratio: KPIMetric;
+  // Additional KPIs
+  total_area: KPIMetric;
+  leased_area: KPIMetric;
+  total_units: KPIMetric;
+  occupied_units: KPIMetric;
+  vacant_units: KPIMetric;
+  total_tenants: KPIMetric;
+  avg_rent_per_sqm: KPIMetric;
 }
 
 export interface DashboardStats {
@@ -340,4 +348,148 @@ export interface ExpiringContractItem {
   days_remaining: number;
   monthly_rent: number | null;
   status: string;
+}
+
+// --- Signing Structure Types ---
+
+export interface SigningStructureItem {
+  type: 'new' | 'renewal' | 'transfer';
+  count: number;
+  area: number;
+  percentage: number;
+  color: string;
+}
+
+export interface SigningStructureResponse {
+  items: SigningStructureItem[];
+  total_count: number;
+  total_area: number;
+  change_percentage: number | null; // Month-over-month change
+}
+
+// --- Brand Trend Types ---
+
+export interface BrandTrendItem {
+  tier: string;
+  count: number;
+  new_this_month: number;
+  change_percentage: number;
+}
+
+export interface BrandTrendResponse {
+  items: BrandTrendItem[];
+  total_brands: number;
+  total_new_this_month: number;
+}
+
+// --- Enhanced KPI with Subtitle ---
+
+export interface EnhancedKPIMetric extends KPIMetric {
+  subtitle?: string; // For displaying additional info like ratio/percentage
+}
+
+// --- Project Detail Types ---
+
+export interface BasicInfoCard {
+  opening_date: string | null;
+  operation_category: string | null;
+  total_area: number;
+  leasable_area: number;
+  building_count: number;
+  floor_count: number;
+}
+
+export interface OperationsCard {
+  annual_rent: number;
+  rent_per_sqm: number;
+  daily_traffic: number;
+  monthly_sales: number;
+  rent_to_sales_ratio: number;
+}
+
+export interface BrandStructureItem {
+  tier: string;
+  tier_name: string;
+  count: number;
+  percentage: number;
+  color: string;
+}
+
+export interface BrandStructureCard {
+  total: number;
+  items: BrandStructureItem[];
+}
+
+export interface FloorStructureItem {
+  floor_id: number;
+  floor_name: string;
+  floor_number: number;
+  total_units: number;
+  occupied_units: number;
+  vacant_units: number;
+  occupancy_rate: number;
+  total_area: number;
+  leased_area: number;
+  expiring_count: number;
+}
+
+export interface FloorStructureCard {
+  total_units: number;
+  occupied_units: number;
+  vacant_units: number;
+  occupancy_rate: number;
+  expiring_total: number;
+  floors: FloorStructureItem[];
+}
+
+export interface ProjectInfoDetailResponse {
+  mall_id: number;
+  mall_name: string;
+  basic_info: BasicInfoCard;
+  operations: OperationsCard;
+  brand_structure: BrandStructureCard;
+  floor_structure: FloorStructureCard;
+  updated_at: string;
+}
+
+// --- Enhanced Brand Tool Types ---
+
+export interface BrandWithMetrics {
+  id: number;
+  tenant_name: string;
+  brand_tier: string | null;
+  type: string;
+  contract_count: number;
+  total_area: number;
+  monthly_rent: number;
+  status: string;
+  // New metrics
+  avg_daily_traffic: number | null;
+  avg_daily_sales: number | null;
+  avg_monthly_sales_per_sqm: number | null;
+  avg_rent_to_sales_ratio: number | null;
+  annual_rent_income: number | null;
+}
+
+// --- Enhanced Unit Tool Types ---
+
+export interface UnitWithLeasingInfo {
+  id: number;
+  unit_code: string;
+  floor_id: number;
+  floor_number: number;
+  floor_name: string;
+  building_id: number;
+  building_name: string;
+  area: number;
+  layout_type: string;
+  status: string;
+  tenant_name: string | null;
+  monthly_rent: number | null;
+  mall_id: number;
+  // New fields
+  leasing_type: string | null;  // new/renewal/adjustment
+  lease_end: string | null;     // contract end date
+  previous_rent: number | null; // previous contract rent
+  vacancy_days: number | null;  // days vacant if status is vacant
 }

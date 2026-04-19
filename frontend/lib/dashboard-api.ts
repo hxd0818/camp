@@ -107,4 +107,58 @@ export const dashboardApi = {
       headers: { 'Content-Type': 'application/json' },
     });
   },
+
+  // Signing structure (new vs renewal)
+  async getSigningStructure(mallId: number) {
+    return apiClient.request(`${BASE}/dashboard/signing-structure?mall_id=${mallId}`);
+  },
+
+  // Brand trend (with month-over-month change)
+  async getBrandTrend(mallId: number) {
+    return apiClient.request(`${BASE}/dashboard/brand-trend?mall_id=${mallId}`);
+  },
+
+  // Project detail (4 cards)
+  async getProjectDetail(mallId: number) {
+    return apiClient.request(`${BASE}/dashboard/project-detail?mall_id=${mallId}`);
+  },
+
+  // Tools - brands with metrics
+  async getBrandsTool(mallId: number, params?: {
+    search?: string;
+    tier?: string;
+    status?: string;
+    skip?: number;
+    limit?: number;
+  }) {
+    const search = new URLSearchParams({ mall_id: String(mallId) });
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') search.set(k, String(v));
+    });
+    return apiClient.request(`${BASE}/dashboard/tools/brands?${search}`);
+  },
+
+  // Tools - units with leasing info
+  async getUnitsTool(mallId: number, params?: {
+    building_id?: number;
+    floor_id?: number;
+    status?: string;
+    area_min?: number;
+    area_max?: number;
+    rent_min?: number;
+    rent_max?: number;
+    leasing_type?: string;
+    layout_type?: string;
+  }) {
+    const search = new URLSearchParams({ mall_id: String(mallId) });
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') search.set(k, String(v));
+    });
+    return apiClient.request(`${BASE}/dashboard/tools/units?${search}`);
+  },
+
+  // Floor summary
+  async getFloorSummary(mallId: number) {
+    return apiClient.request(`${BASE}/dashboard/floor-summary?mall_id=${mallId}`);
+  },
 };

@@ -9,6 +9,8 @@ interface BrandTierData {
   value: number;
   color: string;
   percentage: number;
+  new_this_month?: number; // New brands added this month
+  change_percentage?: number; // Month-over-month change
 }
 
 const TIER_LABELS: Record<string, string> = {
@@ -32,6 +34,8 @@ const TIER_COLORS: Record<string, string> = {
 interface Props {
   data: BrandTierData[];
   loading?: boolean;
+  totalNewThisMonth?: number; // Total new brands this month across all tiers
+  totalChangePercent?: number | null; // Overall month-over-month change
 }
 
 const RADIAN = Math.PI / 180;
@@ -87,7 +91,12 @@ function renderCustomConnector({
   );
 }
 
-export default function BrandTierDonut({ data, loading }: Props) {
+export default function BrandTierDonut({
+  data,
+  loading,
+  totalNewThisMonth = 0,
+  totalChangePercent,
+}: Props) {
   const isEmpty = !data || data.length === 0;
   const total = data.reduce((sum, d) => sum + d.value, 0);
 
@@ -98,8 +107,53 @@ export default function BrandTierDonut({ data, loading }: Props) {
       displayName: TIER_LABELS[d.name] || d.name,
     }));
 
+  const renderCustomTooltip = ({ active, payload }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    const item = payload[0].payload;
+    return (
+      <div className="bg-white border rounded-lg shadow-lg p-3">
+        <p className="font-medium text-gray-700">
+          {item.displayName || item.name}
+        </p>
+        <p className="text-sm text-gray-600">
+          数量: <span className="font-semibold">{item.value}</span> 家
+        </p>
+        {item.new_this_month > 0 && (
+          <p className="text-sm text-green-600">
+            本月新增: +{item.new_this_month} 家
+          </p>
+        )}
+        {item.change_percentage !== undefined && item.change_percentage !== 0 && (
+          <p className={`text-sm ${item.change_percentage > 0 ? 'text-green-600' : 'text-red-500'}`}>
+            环比: {item.change_percentage > 0 ? '+' : ''}{item.change_percentage.toFixed(1)}%
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <ChartWrapper title="品牌能级分布" loading={loading} empty={isEmpty}>
+    <ChartWrapper
+      title="品牌能级分布"
+      loading={loading}
+      empty={isEmpty}
+      extra={
+        totalNewThisMonth > 0 || totalChangePercent !== undefined ? (
+          <div className="flex items-center gap-3">
+            {totalNewThisMonth > 0 && (
+              <div className="text-sm font-medium text-green-600">
+                本月新增 +{totalNewThisMonth}
+              </div>
+            )}
+            {totalChangePercent !== undefined && totalChangePercent !== null && (
+              <div className={`text-sm font-medium ${totalChangePercent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {totalChangePercent >= 0 ? '\u2191' : '\u2193'} {Math.abs(totalChangePercent).toFixed(1)}% 环比
+              </div>
+            )}
+          </div>
+        ) : null
+      }
+    >
       <div className="flex flex-col items-center justify-center w-full h-full">
         <div className="relative">
           <PieChart width={200} height={200}>
@@ -119,7 +173,7 @@ export default function BrandTierDonut({ data, loading }: Props) {
                 <Cell key={`cell-${index}`} fill={entry.color || TIER_COLORS[entry.name] || '#94a3b8'} />
               ))}
             </Pie>
-            <Tooltip formatter={(value: number) => [`${value} 家 (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, '']} />
+            <Tooltip content={renderCustomTooltip} />
           </PieChart>
 
           {/* Center label */}
@@ -127,6 +181,9 @@ export default function BrandTierDonut({ data, loading }: Props) {
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-xl font-bold text-gray-800 leading-none">{total}</span>
               <span className="text-[10px] text-gray-400 mt-0.5">品牌总数</span>
+              {totalNewThisMonth > 0 && (
+                <span className="text-[9px] text-green-600 mt-0.5">+{totalNewThisMonth}</span>
+              )}
             </div>
           )}
         </div>
