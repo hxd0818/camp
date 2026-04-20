@@ -1,5 +1,38 @@
 # CAMP 变更日志
 
+## [2026-04-20] v0.1.17 - Dashboard模块化重构
+
+### 概述
+将monolithic的dashboard.py（1556行）拆分为8个聚焦模块文件，每个文件<400行，遵循高内聚低耦合原则。所有11个API端点验证通过。
+
+### 变更内容
+**新增模块文件：**
+- `backend/app/api/v1/dashboard_helpers.py` (~165行) - 共享常量(KANBAN_STATUS_MAP/VALID_STATUSES/BRAND_TIER_COLORS/NAMES)和工具函数(_validate_mall/_get_mall_floor_ids/_calc_ratio/_calc_mom/_kpi/_make_zero_kpi)
+- `backend/app/api/v1/dashboard_stats.py` (~380行) - GET /stats 核心KPI计算（13指标19字段）
+- `backend/app/api/v1/dashboard_structure.py` (~230行) - 签约结构/空置分析/租期分布/品牌分级
+- `backend/app/api/v1/dashboard_trend.py` (~70行) - 品牌趋势月环比
+- `backend/app/api/v1/dashboard_project.py` (~280行) - 项目概览/详情/楼层汇总
+- `backend/app/api/v1/dashboard_kanban.py` (~130行) - 看板数据+拖拽移动
+- `backend/app/api/v1/dashboard_tools.py` (~220行) - 铺位查询/品牌查询/到期合同
+
+**重构文件：**
+- `backend/app/api/v1/dashboard.py` (1556行→45行) - 改为thin router，仅包含include_router + __all__导出
+
+### 验证结果
+| 端点 | 状态 | 结果 |
+|------|------|------|
+| GET /stats | ✅ | 19个KPI字段全部返回 |
+| GET /signing-structure | ✅ | 21新签/16续签 |
+| GET /brand-tier-trend | ✅ | MoM各能级涨跌不一 |
+| GET /project-detail | ✅ | 4卡片完整数据 |
+| GET /kanban | ✅ | 5列(空置36/预留4/在租47) |
+| GET /floor-summary | ✅ | 5层楼数据 |
+| GET /expiring | ✅ | 16个到期合同 |
+| GET /tools/units | ✅ | 87个铺位 |
+| GET /tools/brands | ✅ | 40个品牌 |
+
+---
+
 ## [2026-04-19] v0.1.16 - KPI测试数据深度增强
 
 ### 概述
