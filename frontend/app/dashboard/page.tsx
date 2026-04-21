@@ -7,6 +7,8 @@ import KPICard from '@/components/dashboard/KPICard';
 import KanbanBoard from '@/components/dashboard/KanbanBoard';
 import ExpiringContractsTable from '@/components/dashboard/ExpiringContractsTable';
 import PlanProgressTable from '@/components/dashboard/PlanProgressTable';
+import AlertPanel from '@/components/dashboard/AlertPanel';
+import EfficiencyTable from '@/components/dashboard/EfficiencyTable';
 import { dashboardApi } from '@/lib/dashboard-api';
 
 const VacancyPieChart = dynamic(
@@ -36,6 +38,8 @@ import type {
   LeasingPlan,
   SigningStructureResponse,
   BrandTrendResponse,
+  AlertsResponse,
+  EfficiencyTableResponse,
 } from '@/lib/types';
 
 /** Helper to safely extract a KPIMetric value with fallback */
@@ -63,6 +67,8 @@ export default function DashboardPage() {
   const [signingStructure, setSigningStructure] = useState<SigningStructureResponse | null>(null);
   const [expiringItems, setExpiringItems] = useState<ExpiringContractItem[]>([]);
   const [plans, setPlans] = useState<LeasingPlan[]>([]);
+  const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
+  const [efficiency, setEfficiency] = useState<EfficiencyTableResponse | null>(null);
 
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -80,6 +86,8 @@ export default function DashboardPage() {
         signingRes,
         expiringRes,
         plansRes,
+        alertsRes,
+        efficiencyRes,
       ] = await Promise.allSettled([
         dashboardApi.getStats(mallId),
         dashboardApi.getKanban(mallId),
@@ -90,6 +98,8 @@ export default function DashboardPage() {
         dashboardApi.getSigningStructure(mallId),
         dashboardApi.getExpiring(mallId, 30),
         dashboardApi.listPlans({ mall_id: mallId }),
+        dashboardApi.getAlerts(mallId),
+        dashboardApi.getEfficiency(mallId),
       ]);
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value as unknown as DashboardStats);
@@ -117,6 +127,8 @@ export default function DashboardPage() {
         setExpiringItems(d?.items || []);
       }
       if (plansRes.status === 'fulfilled') setPlans(plansRes.value as unknown as LeasingPlan[]);
+      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value as unknown as AlertsResponse);
+      if (efficiencyRes.status === 'fulfilled') setEfficiency(efficiencyRes.value as unknown as EfficiencyTableResponse);
     } catch (err) {
       console.error('Dashboard data load error:', err);
     } finally {
@@ -289,6 +301,9 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
+      {/* Alert Panel - P1 Feature */}
+      <AlertPanel alerts={alerts} loading={loading} />
+
       {/* Charts Row - 4 columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <VacancyPieChart
@@ -326,6 +341,9 @@ export default function DashboardPage() {
         <ExpiringContractsTable items={expiringItems} loading={loading} />
         <PlanProgressTable initialPlans={plans} loading={loading} />
       </div>
+
+      {/* Efficiency Table - P1 Feature */}
+      <EfficiencyTable data={efficiency} loading={loading} />
     </>
   );
 }

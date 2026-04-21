@@ -337,3 +337,63 @@ class ProjectInfoDetailResponse(BaseModel):
     floor_structure: FloorStructureCard
 
     updated_at: datetime
+
+
+# --- Alert / Warning System Schemas ---
+
+
+class AlertItem(BaseModel):
+    """Single alert/warning item."""
+    alert_type: str       # overdue_plan / due_soon_plan / long_vacant / expiring_contract
+    severity: str         # critical / warning / info
+    title: str
+    description: str
+    entity_id: int
+    entity_name: str
+    days_overdue: int | None = None   # positive = days past due, negative = days remaining
+    metric_value: float | None = None # vacancy_days, days_remaining, etc.
+    unit: str = ""
+
+
+class AlertsResponse(BaseModel):
+    """Aggregated alerts for dashboard warning panel."""
+    total_count: int = 0
+    critical_count: int = 0
+    warning_count: int = 0
+    info_count: int = 0
+    items: list[AlertItem] = Field(default_factory=list)
+    generated_at: datetime
+
+
+# --- Efficiency Table Schemas ---
+
+
+class EfficiencyRow(BaseModel):
+    """Single row in the leasing efficiency table (grouped by floor)."""
+    group_id: int
+    group_name: str           # floor name e.g. "F1", "B1"
+    total_units: int = 0
+    occupied_units: int = 0
+    vacant_units: int = 0
+    new_signed_this_month: int = 0
+    renewed_this_month: int = 0
+    cumulative_signed: int = 0
+    monthly_completion_rate: float = 0.0
+    avg_daily_traffic: int = 0
+    avg_daily_sales: float = 0.0
+    avg_sales_per_sqm: float = 0.0
+    avg_rent_to_sales_ratio: float = 0.0
+    rent_per_sqm: float = 0.0
+    total_area: float = 0.0
+    leased_area: float = 0.0
+    vacant_area: float = 0.0
+
+
+class EfficiencyTableResponse(BaseModel):
+    """Leasing efficiency table response grouped by floor."""
+    mall_id: int
+    mall_name: str
+    period: str              # "2026-04"
+    rows: list[EfficiencyRow] = Field(default_factory=list)
+    totals: EfficiencyRow = Field(default_factory=EfficiencyRow)
+    updated_at: datetime

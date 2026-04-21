@@ -1,4 +1,4 @@
-"""Dashboard project info endpoints: project-info, project-detail, floor-summary."""
+"""Dashboard project info endpoints: project-info, project-detail, floor-summary, efficiency."""
 
 from datetime import datetime, date, timedelta
 
@@ -25,6 +25,8 @@ from app.schemas.dashboard import (
     FloorStructureItem,
     FloorSummaryResponse,
     FloorSummaryRow,
+    EfficiencyTableResponse,
+    EfficiencyRow,
 )
 
 from .dashboard_helpers import (
@@ -315,3 +317,184 @@ async def get_floor_summary(
     ]
 
     return FloorSummaryResponse(items=items)
+
+
+@router.get("/efficiency", response_model=EfficiencyTableResponse)
+async def get_leasing_efficiency(
+    mall_id: int = Query(..., description="Mall ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Leasing efficiency table grouped by floor.
+
+    For each floor: unit occupancy, monthly signing activity (new/renewal),
+    cumulative contracts, business metrics from MockBusinessData, and rent efficiency.
+    """
+    mall = await _validate_mall(db, mall_id)
+    floor_ids = await _get_mall_floor_ids(db, mall_id)
+
+    if not floor_ids:
+        return EfficiencyTableResponse(
+            mall_id=mall_id, mall_name=mall.name,
+            period=today.replace(day=1).strftime("%Y-%m"),
+            updated_at=datetime.now(),
+        )
+
+    today = date.today()
+    month_start = today.replace(day=1)
+
+    # 1. Per-floor unit aggregation
+    floor_unit_agg = await db.execute(
+        select(
+            Floor.id, Floor.name, Floor.floor_number, Floor.sort_order,
+            func.count(Unit.id).label("total"),
+            func.sum(case((Unit.status == "occupied", 1), else_=0)).label("occupied"),
+            func.sum(case((Unit.status == "vacant", 1), else_=0)).label("vacant"),
+            func.coalesce(func.sum(Unit.gross_area), 0).label("total_area"),
+            func.coalesce(func.sum(case((Unit.status == "occupied", Unit.gross_area), else_=0)), 0).label("leased_area"),
+            func.coalesce(func.sum(case((Unit.status == "vacant", Unit.gross_area), else_=0)), 0).label("vacant_area"),
+        )
+        .join(Unit, Unit.floor_id == Floor.id)
+        .where(Floor.id.in_(floor_ids))
+        .group_by(Floor.id, Floor.name, Floor.floor_number, Floor.sort_order)
+        .order_by(Floor.sort_order, Floor.floor_number)
+    )
+    floor_unit_map = {r[0]: r for r in floor_unit_agg.all()}
+
+    # 2. Per-floor signing activity this month
+    floor_signing = await db.execute(
+        select(
+            Unit.floor_id,
+            func.sum(case((Contract.is_renewal == True, 1), else_=0)).label("renewed"),
+            func.sum(case((Contract.is_renewal != True, 1), else_=0)).label("new_signed"),
+        )
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(
+            Unit.floor_id.in_(floor_ids),
+            Contract.created_at >= month_start,
+            Contract.created_at <= today,
+            Contract.status.in_(["active", "expiring"]),
+        )
+        .group_by(Unit.floor_id)
+    )
+    signing_map = {r[0]: (int(r[2] or 0), int(r[1] or 0)) for r in floor_signing.all()}
+
+    # 3. Per-floor cumulative active contracts
+    floor_cumulative = await db.execute(
+        select(Unit.floor_id, func.count(Contract.id).label("cumulative"))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), Contract.status == "active")
+        .group_by(Unit.floor_id)
+    )
+    cumulative_map = {r[0]: int(r[1] or 0) for r in floor_cumulative.all()}
+
+    # 4. Per-floor business metrics from MockBusinessData
+    from app.models.mock_business_data import MockBusinessData
+
+    floor_biz = await db.execute(
+        select(
+            Unit.floor_id,
+            func.avg(MockBusinessData.daily_traffic).label("avg_traffic"),
+            func.avg(MockBusinessData.daily_sales).label("avg_sales"),
+            func.avg(MockBusinessData.sales_per_sqm).label("avg_spm"),
+            func.avg(MockBusinessData.rent_to_sales_ratio).label("avg_ratio"),
+        )
+        .join(MockBusinessData, MockBusinessData.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), MockBusinessData.data_date >= month_start)
+        .group_by(Unit.floor_id)
+    )
+    biz_map = {}
+    for r in floor_biz.all():
+        biz_map[r[0]] = {
+            "avg_traffic": int(r[1] or 0),
+            "avg_sales": float(r[2] or 0),
+            "avg_spm": float(r[3] or 0),
+            "avg_ratio": float(r[4] or 0),
+        }
+
+    # 5. Per-floor rent-per-sqm
+    floor_rent = await db.execute(
+        select(
+            Unit.floor_id,
+            func.coalesce(func.sum(Contract.monthly_rent.cast(Float)), 0).label("total_rent"),
+        )
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), Contract.status == "active")
+        .group_by(Unit.floor_id)
+    )
+    rent_map = {r[0]: float(r[1] or 0) for r in floor_rent.all()}
+
+    # Assemble rows
+    rows: list[EfficiencyRow] = []
+    totals = EfficiencyRow(group_id=0, group_name="合计")
+
+    for fid, fu in sorted(floor_unit_map.items(), key=lambda x: x[1][3]):  # sort_order
+        fname = fu[1] or f"{fu[2]}F"
+        total_u = int(fu[4] or 0)
+        occ_u = int(fu[5] or 0)
+        vac_u = int(fu[6] or 0)
+        ta = float(fu[7] or 0)
+        la = float(fu[8] or 0)
+        va = float(fu[9] or 0)
+
+        new_sig, ren_sig = signing_map.get(fid, (0, 0))
+        cum_sig = cumulative_map.get(fid, 0)
+        biz = biz_map.get(fid, {})
+        total_rent = rent_map.get(fid, 0.0)
+
+        m_rate = round((new_sig + ren_sig) / max(vac_u, 1) * 100, 1) if vac_u > 0 else 0.0
+        rps = round(total_rent / max(la, 1), 2) if la > 0 else 0.0
+
+        row = EfficiencyRow(
+            group_id=fid,
+            group_name=fname,
+            total_units=total_u,
+            occupied_units=occ_u,
+            vacant_units=vac_u,
+            new_signed_this_month=new_sig,
+            renewed_this_month=ren_sig,
+            cumulative_signed=cum_sig,
+            monthly_completion_rate=m_rate,
+            avg_daily_traffic=biz.get("avg_traffic", 0),
+            avg_daily_sales=biz.get("avg_sales", 0.0),
+            avg_sales_per_sqm=biz.get("avg_spm", 0.0),
+            avg_rent_to_sales_ratio=biz.get("avg_ratio", 0.0),
+            rent_per_sqm=rps,
+            total_area=ta,
+            leased_area=la,
+            vacant_area=va,
+        )
+        rows.append(row)
+
+        # Accumulate totals
+        totals.total_units += total_u
+        totals.occupied_units += occ_u
+        totals.vacant_units += vac_u
+        totals.new_signed_this_month += new_sig
+        totals.renewed_this_month += ren_sig
+        totals.cumulative_signed += cum_sig
+        totals.total_area += ta
+        totals.leased_area += la
+        totals.vacant_area += va
+        if total_rent > 0:
+            totals.rent_per_sqm += total_rent  # will recalc as average later
+
+    # Compute totals averages for ratio fields
+    if rows:
+        n = len(rows)
+        totals.monthly_completion_rate = round(
+            sum(r.monthly_completion_rate for r in rows) / n, 1)
+        totals.avg_daily_traffic = sum(r.avg_daily_traffic for r in rows) // n
+        totals.avg_daily_sales = round(sum(r.avg_daily_sales for r in rows) / n, 2)
+        totals.avg_sales_per_sqm = round(sum(r.avg_sales_per_sqm for r in rows) / n, 2)
+        totals.avg_rent_to_sales_ratio = round(
+            sum(r.avg_rent_to_sales_ratio for r in rows) / n, 2)
+        totals.rent_per_sqm = round(totals.rent_per_sqm / max(totals.leased_area, 1), 2)
+
+    return EfficiencyTableResponse(
+        mall_id=mall_id,
+        mall_name=mall.name,
+        period=month_start.strftime("%Y-%m"),
+        rows=rows,
+        totals=totals,
+        updated_at=datetime.now(),
+    )

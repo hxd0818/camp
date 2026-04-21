@@ -70,6 +70,10 @@ from app.schemas.dashboard import (
     BrandStructureItem,
     FloorStructureCard,
     FloorStructureItem,
+    AlertsResponse,
+    AlertItem,
+    EfficiencyTableResponse,
+    EfficiencyRow,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -1554,3 +1558,249 @@ async def get_floor_summary(
     ]
 
     return FloorSummaryResponse(floors=floors)
+
+
+# ---------------------------------------------------------------------------
+# P1 Feature: Alert/Warning System
+# ---------------------------------------------------------------------------
+
+
+@router.get("/alerts", response_model=AlertsResponse)
+async def get_dashboard_alerts(
+    mall_id: int = Query(..., description="Mall ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate alert/warning items across leasing plans, vacancies, and contracts."""
+    await _validate_mall(db, mall_id)
+    floor_ids = await _get_mall_floor_ids(db, mall_id)
+
+    today = date.today()
+    items: list[AlertItem] = []
+    _SEV_ORDER = {"critical": 0, "warning": 1, "info": 2}
+
+    if floor_ids:
+        # Overdue plans
+        overdue_plans = await db.execute(
+            select(LeasingPlan).where(
+                LeasingPlan.mall_id == mall_id,
+                LeasingPlan.due_date < today,
+                LeasingPlan.status.notin_([PlanStatus.COMPLETED, PlanStatus.CANCELLED]),
+            ).order_by(LeasingPlan.due_date.asc())
+        )
+        for plan in overdue_plans.scalars().all():
+            days_late = (today - plan.due_date).days
+            status_val = plan.status.value if hasattr(plan.status, 'value') else str(plan.status)
+            items.append(AlertItem(
+                alert_type="overdue_plan", severity="critical",
+                title=f"招商计划已逾期: {plan.name}",
+                description=f"截止日 {plan.due_date.isoformat()}，状态 {status_val}",
+                entity_id=plan.id, entity_name=plan.name,
+                days_overdue=days_late, metric_value=float(days_late), unit="天",
+            ))
+
+        # Due-soon plans (within 14 days)
+        due_soon = await db.execute(
+            select(LeasingPlan).where(
+                LeasingPlan.mall_id == mall_id,
+                LeasingPlan.due_date > today,
+                LeasingPlan.due_date <= today + timedelta(days=14),
+                LeasingPlan.status.in_([PlanStatus.DRAFT, PlanStatus.ACTIVE, PlanStatus.IN_PROGRESS]),
+            ).order_by(LeasingPlan.due_date.asc())
+        )
+        for plan in due_soon.scalars().all():
+            days_left = (plan.due_date - today).days
+            items.append(AlertItem(
+                alert_type="due_soon_plan",
+                severity="critical" if days_left <= 3 else "warning",
+                title=f"计划即将到期: {plan.name}",
+                description=f"截止日 {plan.due_date.isoformat()}，剩余 {days_left} 天",
+                entity_id=plan.id, entity_name=plan.name,
+                days_overdue=-days_left, metric_value=float(days_left), unit="天",
+            ))
+
+        # Long-vacant units (>=90 days, capped at 10)
+        long_vacant = await db.execute(
+            select(Unit.id, Unit.code, Unit.gross_area, Unit.vacancy_days)
+            .where(Unit.floor_id.in_(floor_ids), Unit.status == "vacant", Unit.vacancy_days >= 90)
+            .order_by(Unit.vacancy_days.desc()).limit(10)
+        )
+        for uid, ucode, uarea, vdays in long_vacant.all():
+            items.append(AlertItem(
+                alert_type="long_vacant",
+                severity="critical" if vdays >= 180 else "warning",
+                title=f"长期空置铺位: {ucode}",
+                description=f"已空置 {vdays} 天，面积 {uarea or 0}m²",
+                entity_id=uid, entity_name=ucode,
+                days_overdue=vdays, metric_value=float(vdays), unit="天",
+            ))
+
+        # Urgent expiring contracts (<=7 days)
+        urgent_exp = await db.execute(
+            select(Contract.id, Contract.contract_number, Unit.code, Tenant.name, Contract.lease_end)
+            .join(Unit, Contract.unit_id == Unit.id)
+            .outerjoin(Tenant, Contract.tenant_id_ref == Tenant.id)
+            .where(
+                Unit.floor_id.in_(floor_ids),
+                Contract.lease_end >= today,
+                Contract.lease_end <= today + timedelta(days=7),
+                Contract.status == "active",
+            ).order_by(Contract.lease_end.asc())
+        )
+        for cid, cnum, ucode, tname, lend in urgent_exp.all():
+            days_left = (lend - today).days
+            items.append(AlertItem(
+                alert_type="expiring_contract", severity="critical",
+                title=f"即将到期合同: {cnum} ({ucode})",
+                description=f"租户: {tname or 'N/A'}，到期日 {lend.isoformat()}",
+                entity_id=cid, entity_name=cnum,
+                days_overdue=-days_left, metric_value=float(days_left), unit="天",
+            ))
+
+    items.sort(key=lambda x: (_SEV_ORDER.get(x.severity, 99), -abs(x.days_overdue or 0)))
+
+    return AlertsResponse(
+        total_count=len(items),
+        critical_count=sum(1 for i in items if i.severity == "critical"),
+        warning_count=sum(1 for i in items if i.severity == "warning"),
+        info_count=sum(1 for i in items if i.severity == "info"),
+        items=items,
+        generated_at=datetime.now(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# P1 Feature: Leasing Efficiency Table (grouped by floor)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/efficiency", response_model=EfficiencyTableResponse)
+async def get_leasing_efficiency(
+    mall_id: int = Query(..., description="Mall ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Leasing efficiency table grouped by floor with occupancy, signing, and business metrics."""
+    today = date.today()
+    mall = await _validate_mall(db, mall_id)
+    floor_ids = await _get_mall_floor_ids(db, mall_id)
+
+    if not floor_ids:
+        return EfficiencyTableResponse(
+            mall_id=mall_id, mall_name=mall.name,
+            period=today.replace(day=1).strftime("%Y-%m"),
+            updated_at=datetime.now(),
+        )
+
+    month_start = today.replace(day=1)
+
+    # 1. Per-floor unit aggregation
+    floor_unit_agg = await db.execute(
+        select(Floor.id, Floor.name, Floor.floor_number, Floor.sort_order,
+               func.count(Unit.id).label("total"),
+               func.sum(case((Unit.status == "occupied", 1), else_=0)).label("occupied"),
+               func.sum(case((Unit.status == "vacant", 1), else_=0)).label("vacant"),
+               func.coalesce(func.sum(Unit.gross_area), 0).label("total_area"),
+               func.coalesce(func.sum(case((Unit.status == "occupied", Unit.gross_area), else_=0)), 0).label("leased_area"),
+               func.coalesce(func.sum(case((Unit.status == "vacant", Unit.gross_area), else_=0)), 0).label("vacant_area"))
+        .join(Unit, Unit.floor_id == Floor.id)
+        .where(Floor.id.in_(floor_ids))
+        .group_by(Floor.id, Floor.name, Floor.floor_number, Floor.sort_order)
+        .order_by(Floor.sort_order, Floor.floor_number)
+    )
+    floor_unit_map = {r[0]: r for r in floor_unit_agg.all()}
+
+    # 2. Monthly signing activity per floor
+    floor_signing = await db.execute(
+        select(Unit.floor_id,
+               func.sum(case((Contract.is_renewal == True, 1), else_=0)).label("renewed"),
+               func.sum(case((Contract.is_renewal != True, 1), else_=0)).label("new_signed"))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), Contract.created_at >= month_start,
+               Contract.created_at <= today, Contract.status.in_(["active", "expiring"]))
+        .group_by(Unit.floor_id)
+    )
+    signing_map = {r[0]: (int(r[2] or 0), int(r[1] or 0)) for r in floor_signing.all()}
+
+    # 3. Cumulative active contracts per floor
+    floor_cumulative = await db.execute(
+        select(Unit.floor_id, func.count(Contract.id).label("cumulative"))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), Contract.status == "active")
+        .group_by(Unit.floor_id)
+    )
+    cumulative_map = {r[0]: int(r[1] or 0) for r in floor_cumulative.all()}
+
+    # 4. Business metrics from MockBusinessData
+    from app.models.mock_business_data import MockBusinessData
+
+    floor_biz = await db.execute(
+        select(Unit.floor_id,
+               func.avg(MockBusinessData.daily_traffic).label("avg_traffic"),
+               func.avg(MockBusinessData.daily_sales).label("avg_sales"),
+               func.avg(MockBusinessData.sales_per_sqm).label("avg_spm"),
+               func.avg(MockBusinessData.rent_to_sales_ratio).label("avg_ratio"))
+        .join(MockBusinessData, MockBusinessData.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), MockBusinessData.data_date >= month_start)
+        .group_by(Unit.floor_id)
+    )
+    biz_map = {}
+    for r in floor_biz.all():
+        biz_map[r[0]] = {
+            "avg_traffic": int(r[1] or 0), "avg_sales": float(r[2] or 0),
+            "avg_spm": float(r[3] or 0), "avg_ratio": float(r[4] or 0),
+        }
+
+    # 5. Rent-per-sqm per floor
+    floor_rent = await db.execute(
+        select(Unit.floor_id, func.coalesce(func.sum(Contract.monthly_rent.cast(Float)), 0).label("total_rent"))
+        .join(Contract, Contract.unit_id == Unit.id)
+        .where(Unit.floor_id.in_(floor_ids), Contract.status == "active")
+        .group_by(Unit.floor_id)
+    )
+    rent_map = {r[0]: float(r[1] or 0) for r in floor_rent.all()}
+
+    # Assemble rows
+    rows: list[EfficiencyRow] = []
+    totals = EfficiencyRow(group_id=0, group_name="合计")
+
+    for fid, fu in sorted(floor_unit_map.items(), key=lambda x: x[1][3]):
+        fname = fu[1] or f"{fu[2]}F"
+        total_u = int(fu[4] or 0); occ_u = int(fu[5] or 0); vac_u = int(fu[6] or 0)
+        ta = float(fu[7] or 0); la = float(fu[8] or 0); va = float(fu[9] or 0)
+        new_sig, ren_sig = signing_map.get(fid, (0, 0))
+        cum_sig = cumulative_map.get(fid, 0)
+        biz = biz_map.get(fid, {})
+        total_rent = rent_map.get(fid, 0.0)
+
+        row = EfficiencyRow(
+            group_id=fid, group_name=fname,
+            total_units=total_u, occupied_units=occ_u, vacant_units=vac_u,
+            new_signed_this_month=new_sig, renewed_this_month=ren_sig,
+            cumulative_signed=cum_sig,
+            monthly_completion_rate=round((new_sig + ren_sig) / max(vac_u, 1) * 100, 1) if vac_u > 0 else 0.0,
+            avg_daily_traffic=biz.get("avg_traffic", 0),
+            avg_daily_sales=biz.get("avg_sales", 0.0),
+            avg_sales_per_sqm=biz.get("avg_spm", 0.0),
+            avg_rent_to_sales_ratio=biz.get("avg_ratio", 0.0),
+            rent_per_sqm=round(total_rent / max(la, 1), 2) if la > 0 else 0.0,
+            total_area=ta, leased_area=la, vacant_area=va,
+        )
+        rows.append(row)
+        totals.total_units += total_u; totals.occupied_units += occ_u
+        totals.vacant_units += vac_u; totals.new_signed_this_month += new_sig
+        totals.renewed_this_month += ren_sig; totals.cumulative_signed += cum_sig
+        totals.total_area += ta; totals.leased_area += la; totals.vacant_area += va
+        if total_rent > 0: totals.rent_per_sqm += total_rent
+
+    if rows:
+        n = len(rows)
+        totals.monthly_completion_rate = round(sum(r.monthly_completion_rate for r in rows) / n, 1)
+        totals.avg_daily_traffic = sum(r.avg_daily_traffic for r in rows) // n
+        totals.avg_daily_sales = round(sum(r.avg_daily_sales for r in rows) / n, 2)
+        totals.avg_sales_per_sqm = round(sum(r.avg_sales_per_sqm for r in rows) / n, 2)
+        totals.avg_rent_to_sales_ratio = round(sum(r.avg_rent_to_sales_ratio for r in rows) / n, 2)
+        totals.rent_per_sqm = round(totals.rent_per_sqm / max(totals.leased_area, 1), 2)
+
+    return EfficiencyTableResponse(
+        mall_id=mall_id, mall_name=mall.name, period=month_start.strftime("%Y-%m"),
+        rows=rows, totals=totals, updated_at=datetime.now(),
+    )

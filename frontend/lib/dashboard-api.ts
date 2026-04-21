@@ -161,4 +161,14 @@ export const dashboardApi = {
   async getFloorSummary(mallId: number) {
     return apiClient.request(`${BASE}/dashboard/floor-summary?mall_id=${mallId}`);
   },
+
+  // Alert/warning aggregation panel
+  async getAlerts(mallId: number) {
+    return apiClient.request(`${BASE}/dashboard/alerts?mall_id=${mallId}`);
+  },
+
+  // Leasing efficiency table (grouped by floor)
+  async getEfficiency(mallId: number) {
+    return apiClient.request(`${BASE}/dashboard/efficiency?mall_id=${mallId}`);
+  },
 };

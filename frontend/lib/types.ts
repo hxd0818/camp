@@ -502,3 +502,57 @@ export interface UnitWithLeasingInfo {
   previous_rent: number | null; // previous contract rent
   vacancy_days: number | null;  // days vacant if status is vacant
 }
+
+// --- Alert / Warning System Types ---
+
+export interface AlertItem {
+  alert_type: 'overdue_plan' | 'due_soon_plan' | 'long_vacant' | 'expiring_contract';
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  description: string;
+  entity_id: number;
+  entity_name: string;
+  days_overdue: number | null;   // positive = days past due, negative = days remaining
+  metric_value: number | null;
+  unit: string;
+}
+
+export interface AlertsResponse {
+  total_count: number;
+  critical_count: number;
+  warning_count: number;
+  info_count: number;
+  items: AlertItem[];
+  generated_at: string;
+}
+
+// --- Efficiency Table Types ---
+
+export interface EfficiencyRow {
+  group_id: number;
+  group_name: string;
+  total_units: number;
+  occupied_units: number;
+  vacant_units: number;
+  new_signed_this_month: number;
+  renewed_this_month: number;
+  cumulative_signed: number;
+  monthly_completion_rate: number;
+  avg_daily_traffic: number;
+  avg_daily_sales: number;
+  avg_sales_per_sqm: number;
+  avg_rent_to_sales_ratio: number;
+  rent_per_sqm: number;
+  total_area: number;
+  leased_area: number;
+  vacant_area: number;
+}
+
+export interface EfficiencyTableResponse {
+  mall_id: number;
+  mall_name: string;
+  period: string;
+  rows: EfficiencyRow[];
+  totals: EfficiencyRow;
+  updated_at: string;
+}

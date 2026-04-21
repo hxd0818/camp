@@ -1,5 +1,31 @@
 # CAMP 变更日志
 
+## [2026-04-21] v0.1.18 - P1缺口: 预警系统 + 招商效率表格
+
+### 概述
+实现PPT需求分析中识别的2个P1级缺口功能：统一预警中心面板和按楼层分组的招商效率看板。完成度从~90%提升至~95%。
+
+### 变更内容
+**后端新增端点：**
+- `GET /dashboard/alerts?mall_id=` — 聚合4类预警（逾期计划/临期计划/长期空置/即将到期合同），按严重度排序，返回critical/warning/info三级分类
+- `GET /dashboard/efficiency?mall_id=` — 按楼层分组效率数据（铺位占用/本月签约/累计合同/经营指标/租金坪效），含合计行
+- `backend/app/schemas/dashboard.py` — 新增AlertItem/AlertsResponse/EfficiencyRow/EfficiencyTableResponse 4个Schema
+- `backend/app/api/v1/dashboard_alerts.py` — 预警聚合端点独立模块（~150行）
+- `scripts/enhance-kpi-v11.sql` — 测试数据增强：调整计划due_date、设置is_renewal分布、到期合同7天内
+
+**前端新增组件：**
+- `frontend/components/dashboard/AlertPanel.tsx` (~250行) — 可折叠预警面板，顶部汇总栏(紧急/预警/提示计数)，分组列表带左侧色条，Loading骨架屏+空状态
+- `frontend/components/dashboard/EfficiencyTable.tsx` (~280行) — 12列表格（楼层/铺位/签约/完成率/客流/坪效/租售比/租金坪效），底部合计行，迷你进度条
+- Dashboard页面集成：KPI行2后插入AlertPanel，底部表格后插入EfficiencyTable
+
+### 验证结果
+| 端点 | 状态 | 结果 |
+|------|------|------|
+| GET /alerts | ✅ | 12条预警 (10长期空置+1逾期计划+1临期合同) |
+| GET /efficiency | ✅ | 5层楼完整数据 + 合计行 |
+
+---
+
 ## [2026-04-20] v0.1.17 - Dashboard模块化重构
 
 ### 概述
